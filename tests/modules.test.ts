@@ -7,7 +7,7 @@ import { MODULE_BOUNDARIES, MODULE_IMPORTS, PIPELINE_STAGES } from "../src/share
 import { ATTENTION_REASON_LABELS, ATTENTION_REASONS } from "../src/shared/vocabulary.js";
 
 const srcRoot = resolve("src");
-const allowedPackages = new Set(["zod", "yaml"]);
+const allowedPackages = new Set(["typescript", "zod", "yaml"]);
 
 function walkTypeScriptFiles(directory: string): string[] {
   const files: string[] = [];

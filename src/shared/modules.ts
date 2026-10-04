@@ -16,7 +16,7 @@ const boundaries = [
   },
   {
     name: "parser",
-    responsibility: "Owns mapping changed lines onto Tree-sitter logical blocks.",
+    responsibility: "Owns mapping changed lines onto TypeScript and JavaScript logical blocks.",
   },
   {
     name: "analysis",

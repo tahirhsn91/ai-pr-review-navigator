@@ -94,7 +94,8 @@ describe("tooling", () => {
     expect(readme).toMatch(/^1\. \*\*Foundation and contracts\*\* — Current\./m);
     expect(readme).toMatch(/^2\. \*\*GitHub pull request intake\*\* — Current\./m);
     expect(readme).toMatch(/^3\. \*\*Diff model\*\* — Current\./m);
-    for (const number of [4, 5, 6, 7, 8, 9]) {
+    expect(readme).toMatch(/^4\. \*\*Logical blocks\*\* — Current\./m);
+    for (const number of [5, 6, 7, 8, 9]) {
       expect(readme).toMatch(new RegExp(`^${number}\\. .+ — Not started\\.`, "m"));
     }
   });
