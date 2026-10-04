@@ -1,0 +1,24 @@
+# Review focus policy. Listing a reason here records that a future
+# analyzer may emit it. This file does not analyze code.
+version: 1
+selection:
+  maxBlocks: 12
+  minBand: medium
+ignore:
+  - "**/node_modules/**"
+  - "**/dist/**"
+  - "**/coverage/**"
+  - "**/*.lock"
+  - "**/package-lock.json"
+languages:
+  - typescript
+  - javascript
+attention:
+  - public_api
+  - control_flow
+  - error_handling
+  - data_shape
+  - concurrency
+  - security_boundary
+  - wide_span
+  - cross_file_coupling
