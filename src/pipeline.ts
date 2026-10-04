@@ -11,7 +11,7 @@ import type {
 } from "./github/types.js";
 import { unimplementedExplainAttention } from "./llm/index.js";
 import type { AttentionExplanation, ExplainAttentionRequest } from "./llm/types.js";
-import { createUnimplementedCodeParser } from "./parser/index.js";
+import { createCodeParser } from "./parser/index.js";
 import type { ChangedBlockRequest, LogicalBlock } from "./parser/types.js";
 import { createUnimplementedPrioritizer } from "./prioritization/index.js";
 import type { RankBlocksRequest, RankedBlock } from "./prioritization/types.js";
@@ -32,7 +32,7 @@ export interface ReviewPipeline {
 export function createFoundationPipeline(): ReviewPipeline {
   const github = createUnimplementedGitHubClient();
   const diffs = createDiffParser();
-  const parser = createUnimplementedCodeParser();
+  const parser = createCodeParser();
   const analysis = createUnimplementedAnalyzer();
   const prioritization = createUnimplementedPrioritizer();
   const explainAttention = unimplementedExplainAttention();

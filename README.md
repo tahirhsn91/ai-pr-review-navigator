@@ -2,7 +2,7 @@
 
 Review Navigator is a GitHub-native tool that finds the logical code blocks in a pull request that deserve a human reviewer. It orders attention. It does not hunt for bugs, assign defect severity, or propose patches.
 
-The library loads and validates configuration, retrieves a pull request diff from the GitHub REST API when a caller supplies a token, and normalizes changed files, hunks, line ranges, and source at the base and head commits. Tree-sitter, ranking, LLM explanations, and comment publishing are not implemented. Those pipeline stages still fail closed.
+The library loads and validates configuration, retrieves a pull request diff from the GitHub REST API when a caller supplies a token, and maps changed lines in TypeScript and JavaScript onto logical blocks. Ranking, LLM explanations, and comment publishing are not implemented. Those pipeline stages still fail closed.
 
 `.github/workflows/pr-review-focus.yml` is an unprivileged pull request workflow. It runs the project checks and logs the pull request number, base SHA, head SHA, and event type from the Actions event. That workflow does not call the GitHub REST API and does not need an LLM secret.
 
@@ -97,21 +97,21 @@ shared
 
 Filter `ignore` and `languages` before parsing. The parser maps syntax onto changed lines. It does not interpret policy.
 
-| Module               | Responsibility                                                                                         |
-| -------------------- | ------------------------------------------------------------------------------------------------------ |
-| `src/config`         | Load and validate environment variables and the review-focus policy with Zod                           |
-| `src/github`         | Pull request event metadata and GitHub REST reads of patches and file contents at a commit SHA         |
-| `src/diff`           | Files, hunks, changed lines, and base and head source for a pull request diff                          |
-| `src/parser`         | Tree-sitter logical blocks (functions, methods, classes, and the other kinds in `LOGICAL_BLOCK_KINDS`) |
-| `src/analysis`       | Attention reasons for a logical block                                                                  |
-| `src/prioritization` | Rank blocks and apply `maxBlocks` and `minBand`                                                        |
-| `src/llm`            | Claude or GPT explanations for blocks already selected                                                 |
-| `src/publisher`      | Post the focus report on the pull request                                                              |
-| `src/shared`         | Errors, line ranges, and shared vocabulary                                                             |
+| Module               | Responsibility                                                                                 |
+| -------------------- | ---------------------------------------------------------------------------------------------- |
+| `src/config`         | Load and validate environment variables and the review-focus policy with Zod                   |
+| `src/github`         | Pull request event metadata and GitHub REST reads of patches and file contents at a commit SHA |
+| `src/diff`           | Files, hunks, changed lines, and base and head source for a pull request diff                  |
+| `src/parser`         | TypeScript and JavaScript logical blocks from the base and head syntax trees                   |
+| `src/analysis`       | Attention reasons for a logical block                                                          |
+| `src/prioritization` | Rank blocks and apply `maxBlocks` and `minBand`                                                |
+| `src/llm`            | Claude or GPT explanations for blocks already selected                                         |
+| `src/publisher`      | Post the focus report on the pull request                                                      |
+| `src/shared`         | Errors, line ranges, and shared vocabulary                                                     |
 
 `src/pipeline.ts` composes those modules. `src/index.ts` is the package entry. Import rules live in `MODULE_IMPORTS` in `src/shared/modules.ts`.
 
-Tree-sitter packages are not installed yet. The `CodeParser` interface is the seam for that implementation, which keeps `npm install` free of native grammar builds.
+TypeScript and JavaScript are parsed with the TypeScript compiler API. `createParserRegistry()` can register another language later. Tree-sitter grammars are not installed, so `npm install` does not build a native parser.
 
 ## Layout
 
@@ -178,6 +178,29 @@ Node.js 24 LTS is the runtime for this workflow. The job timeout is 15 minutes. 
 - The two sides of a file are fetched one after the other. Responses 429, 502, 503, and 504, and a 403 that is a rate limit, retry up to 3 times when the wait is at most 10 seconds. A later failure throws. The result is not marked complete.
 - This step does not analyze attention and does not publish a GitHub comment.
 
+## Logical blocks
+
+`createCodeParser()` compares the base and head syntax of each changed file. A changed line is assigned to the smallest structure that contains it. An unchanged loop or condition is not returned merely because it exists. The enclosing function or method is recorded on the block as context.
+
+Supported now:
+
+- TypeScript and JavaScript, including JSX: `.ts`, `.tsx`, `.mts`, `.cts`, `.js`, `.jsx`, `.mjs`, `.cjs`.
+- Functions, methods, classes, conditional branches, loops, returns, and `try` / `catch` / `finally`.
+- Arithmetic expressions.
+- Heuristic call shapes for database access, `fetch` and `http.request`, validation (`validate`, `safeParse`, `schema.parse`), authorization (`authorize`, `hasPermission`, and the related names), event `publish` / `emit` / `dispatch`, and `transaction` / `beginTransaction`.
+
+These labels are syntax only. They are not attention decisions. Heuristic labels use medium confidence. A syntax error lowers a mapped block to partial status and medium confidence. A missing patch, a language outside the registry, or a change that falls outside every structure is `unknown` with low confidence and no invented range.
+
+Pass `languages` and `ignore` on the parse request to apply the review-focus filters before parsing. Ignored paths are omitted. The foundation pipeline does not read the policy file itself, and it still does not call GitHub.
+
+Limitations:
+
+- Sibling structures of the same kind are paired in source order. Inserting a block above a similar one can shift that pairing.
+- A function or method rename is `moved` only when its parameter list and body still match one unmatched counterpart. A rename that also edits the body is reported as a removal plus an addition.
+- Comment-only changes that sit outside a structure are unmapped.
+- No other languages are built in. Register a `LanguageSyntaxParser` for a new extension.
+- This step does not call an LLM and does not publish a review comment.
+
 ## Security
 
 - Put `GITHUB_TOKEN` in the environment when a caller retrieves a pull request diff. Put `ANTHROPIC_API_KEY` and `OPENAI_API_KEY` in the environment when a later milestone needs them.
@@ -187,12 +210,12 @@ Node.js 24 LTS is the runtime for this workflow. The job timeout is 15 minutes. 
 
 ## Milestones
 
-Ship these in order. Milestones 1–3 are in the tree. Milestones 4–9 are not started.
+Ship these in order. Milestones 1–4 are in the tree. Milestones 5–9 are not started.
 
 1. **Foundation and contracts** — Current. Tooling, module boundaries, validated configuration, and fail-closed pipeline stages.
 2. **GitHub pull request intake** — Current. Read pull request metadata, paginated changed files, patches, and file contents at the base and head commit SHAs.
 3. **Diff model** — Current. Normalize unified diffs into files, hunks, changed line ranges, and base and head source, and mark missing information.
-4. **Logical blocks** — Not started. Use Tree-sitter to map changed lines onto functions, methods, classes, and other blocks.
+4. **Logical blocks** — Current. Map changed lines in TypeScript and JavaScript onto functions, branches, loops, and the other structures in `LOGICAL_BLOCK_KINDS`.
 5. **Attention analysis** — Not started. Decide which blocks deserve a human and record the attention reason. Report where to look, not defects.
 6. **Prioritization** — Not started. Rank assessed blocks and keep the set allowed by the review-focus policy.
 7. **LLM explanations** — Not started. Ask Claude or GPT to explain why a selected block deserves attention.
@@ -201,4 +224,4 @@ Ship these in order. Milestones 1–3 are in the tree. Milestones 4–9 are not 
 
 ## Stack
 
-Node.js, TypeScript in strict mode, npm, GitHub Actions, Zod, Vitest, ESLint, Prettier, and the GitHub REST API. Logical blocks will be parsed with Tree-sitter. Explanations will go through an `LlmProvider` for Claude or GPT. The MVP has no web server, dashboard, or database.
+Node.js, TypeScript in strict mode, npm, GitHub Actions, Zod, Vitest, ESLint, Prettier, the GitHub REST API, and the TypeScript compiler API for logical blocks. Additional languages can register a syntax parser. Explanations will go through an `LlmProvider` for Claude or GPT. The MVP has no web server, dashboard, or database.

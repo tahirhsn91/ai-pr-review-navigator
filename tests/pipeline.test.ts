@@ -17,8 +17,14 @@ const block: LogicalBlock = {
   path: "src/example.ts",
   kind: "function",
   name: "example",
-  range: { startLine: 1, endLine: 4 },
-  changedLines: { startLine: 2, endLine: 3 },
+  enclosingSymbol: null,
+  context: [],
+  baseRange: { startLine: 1, endLine: 4 },
+  headRange: { startLine: 1, endLine: 4 },
+  changedLines: [{ side: "head", range: { startLine: 2, endLine: 3 } }],
+  change: "modified",
+  confidence: "high",
+  parseStatus: "parsed",
 };
 
 const assessment: BlockAssessment = {
@@ -108,7 +114,7 @@ describe("foundation pipeline", () => {
     expect(stages.map((stage) => stage.name).sort()).toEqual(Object.keys(pipeline).sort());
 
     for (const stage of stages) {
-      if (stage.name === "parseDiffs") {
+      if (stage.name === "parseDiffs" || stage.name === "findChangedBlocks") {
         continue;
       }
       const error = await stageError(stage.run);
@@ -139,5 +145,33 @@ describe("foundation pipeline", () => {
       addedRanges: [{ startLine: 1, endLine: 1 }],
       removedRanges: [{ startLine: 1, endLine: 1 }],
     });
+  });
+
+  it("maps a changed statement to its enclosing block", async () => {
+    const pipeline = createFoundationPipeline();
+    const blocks = await pipeline.findChangedBlocks({
+      diffs: [
+        {
+          path: "src/price.ts",
+          status: "modified",
+          hunks: [],
+          addedRanges: [{ startLine: 2, endLine: 2 }],
+          removedRanges: [{ startLine: 2, endLine: 2 }],
+          patchStatus: "parsed",
+          lineMappingComplete: true,
+        },
+      ],
+      sources: [
+        {
+          path: "src/price.ts",
+          baseText: "export function price(value: number) {\n  return 0;\n}\n",
+          headText: "export function price(value: number) {\n  return value;\n}\n",
+        },
+      ],
+    });
+    expect(blocks.some((item) => item.kind === "return" && item.enclosingSymbol === "price")).toBe(
+      true,
+    );
+    expect(blocks.some((item) => item.kind === "loop")).toBe(false);
   });
 });

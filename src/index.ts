@@ -30,13 +30,28 @@ export {
 } from "./github/index.js";
 export type { PullRequestEventAction, PullRequestEventMetadata } from "./github/index.js";
 export type { AttentionExplanation, ExplainAttentionRequest, LlmProvider } from "./llm/types.js";
-export { LOGICAL_BLOCK_KINDS } from "./parser/types.js";
+export { createCodeParser, createParserRegistry } from "./parser/index.js";
+export {
+  BLOCK_CHANGES,
+  LOGICAL_BLOCK_KINDS,
+  MAPPING_CONFIDENCE,
+  PARSE_STATUSES,
+} from "./parser/types.js";
 export type {
+  BlockChange,
   ChangedBlockRequest,
+  ChangedLineRange,
   CodeParser,
+  EnclosingFrame,
+  LanguageSyntaxParser,
   LogicalBlock,
   LogicalBlockKind,
+  MappingConfidence,
+  ParseStatus,
+  ParserRegistry,
   SourceFile,
+  SyntaxNode,
+  SyntaxTree,
 } from "./parser/types.js";
 export { createFoundationPipeline } from "./pipeline.js";
 export type { ReviewPipeline } from "./pipeline.js";
