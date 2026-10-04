@@ -62,4 +62,4 @@ Cover validation, module boundaries, and fail-closed stages with synthetic input
 
 ## Milestones
 
-Ship the nine milestones in the README in order. This tree is milestone 1, plus the unprivileged pull request workflow that validates and logs event metadata. Milestones 2–9 in the README are not started. Start the next milestone when the task asks for it.
+Ship the nine milestones in the README in order. This tree includes milestones 1–3 and the unprivileged pull request workflow that validates and logs event metadata. `createGitHubClient` and `processPullRequestDiff` retrieve and normalize a diff. `createFoundationPipeline` still leaves GitHub fetch, parsing, analysis, ranking, explanations, and publishing unimplemented. The pull request workflow does not call the REST API, an LLM, or the comment API. Milestones 4–9 in the README are not started. Start the next milestone when the task asks for it.

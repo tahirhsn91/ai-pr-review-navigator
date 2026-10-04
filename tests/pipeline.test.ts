@@ -42,7 +42,7 @@ async function stageError(run: () => unknown): Promise<unknown> {
 }
 
 describe("foundation pipeline", () => {
-  it("fails closed on every stage", async () => {
+  it("fails closed on stages that are not implemented yet", async () => {
     const pipeline = createFoundationPipeline();
     const policy = loadConfig({
       cwd: process.cwd(),
@@ -108,6 +108,9 @@ describe("foundation pipeline", () => {
     expect(stages.map((stage) => stage.name).sort()).toEqual(Object.keys(pipeline).sort());
 
     for (const stage of stages) {
+      if (stage.name === "parseDiffs") {
+        continue;
+      }
       const error = await stageError(stage.run);
       expect(error).toBeInstanceOf(NotImplementedError);
       if (error instanceof NotImplementedError) {
@@ -115,5 +118,26 @@ describe("foundation pipeline", () => {
         expect(error.message).toContain(stage.feature);
       }
     }
+  });
+
+  it("parses diff hunks in the pipeline", () => {
+    const pipeline = createFoundationPipeline();
+    const parsed = pipeline.parseDiffs([
+      {
+        filename: "src/a.ts",
+        status: "modified",
+        patch: ["@@ -1 +1 @@", "-before", "+after"].join("\n"),
+        additions: 1,
+        deletions: 1,
+      },
+    ]);
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0]).toMatchObject({
+      path: "src/a.ts",
+      patchStatus: "parsed",
+      lineMappingComplete: true,
+      addedRanges: [{ startLine: 1, endLine: 1 }],
+      removedRanges: [{ startLine: 1, endLine: 1 }],
+    });
   });
 });

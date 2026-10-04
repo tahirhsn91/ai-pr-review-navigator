@@ -11,7 +11,8 @@ const boundaries = [
   },
   {
     name: "diff",
-    responsibility: "Owns the file, hunk, and changed-line model of a pull request diff.",
+    responsibility:
+      "Owns the file, hunk, changed-line, and base/head source model of a pull request diff.",
   },
   {
     name: "parser",
