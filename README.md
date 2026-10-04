@@ -33,6 +33,8 @@ npm run build
 
 `npm run format` rewrites files with Prettier. The foundation has no CLI that reviews a pull request. `createFoundationPipeline()` throws `NotImplementedError` from every stage.
 
+After `npm run build`, `node dist/github/report-pull-request-event.js` prints pull request metadata when `GITHUB_EVENT_PATH` points at a GitHub `pull_request` event file.
+
 ## Scripts
 
 | Script                 | Purpose                                          |
