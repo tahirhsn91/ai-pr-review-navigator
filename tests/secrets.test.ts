@@ -92,7 +92,9 @@ describe("tooling", () => {
     expect(readme).toContain("20.19.0");
     expect(readme).toContain("10.8.0");
     expect(readme).toMatch(/^1\. \*\*Foundation and contracts\*\* — Current\./m);
-    for (const number of [2, 3, 4, 5, 6, 7, 8, 9]) {
+    expect(readme).toMatch(/^2\. \*\*GitHub pull request intake\*\* — Current\./m);
+    expect(readme).toMatch(/^3\. \*\*Diff model\*\* — Current\./m);
+    for (const number of [4, 5, 6, 7, 8, 9]) {
       expect(readme).toMatch(new RegExp(`^${number}\\. .+ — Not started\\.`, "m"));
     }
   });

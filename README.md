@@ -2,9 +2,9 @@
 
 Review Navigator is a GitHub-native tool that finds the logical code blocks in a pull request that deserve a human reviewer. It orders attention. It does not hunt for bugs, assign defect severity, or propose patches.
 
-The foundation in this repository is milestone 1. It loads and validates configuration, defines the pipeline contracts, and fails closed. It does not call the GitHub REST API, parse a diff, run Tree-sitter, rank blocks, call an LLM, or post a comment.
+The library loads and validates configuration, retrieves a pull request diff from the GitHub REST API when a caller supplies a token, and normalizes changed files, hunks, line ranges, and source at the base and head commits. Tree-sitter, ranking, LLM explanations, and comment publishing are not implemented. Those pipeline stages still fail closed.
 
-`.github/workflows/pr-review-focus.yml` is an unprivileged pull request workflow. It runs the project checks and logs the pull request number, base SHA, head SHA, and event type from the Actions event. It does not need an LLM secret.
+`.github/workflows/pr-review-focus.yml` is an unprivileged pull request workflow. It runs the project checks and logs the pull request number, base SHA, head SHA, and event type from the Actions event. That workflow does not call the GitHub REST API and does not need an LLM secret.
 
 ## Supported versions
 
@@ -100,8 +100,8 @@ Filter `ignore` and `languages` before parsing. The parser maps syntax onto chan
 | Module               | Responsibility                                                                                         |
 | -------------------- | ------------------------------------------------------------------------------------------------------ |
 | `src/config`         | Load and validate environment variables and the review-focus policy with Zod                           |
-| `src/github`         | Pull request event metadata, plus later GitHub REST reads of patches and file text                     |
-| `src/diff`           | Files, hunks, and changed lines                                                                        |
+| `src/github`         | Pull request event metadata and GitHub REST reads of patches and file contents at a commit SHA         |
+| `src/diff`           | Files, hunks, changed lines, and base and head source for a pull request diff                          |
 | `src/parser`         | Tree-sitter logical blocks (functions, methods, classes, and the other kinds in `LOGICAL_BLOCK_KINDS`) |
 | `src/analysis`       | Attention reasons for a logical block                                                                  |
 | `src/prioritization` | Rank blocks and apply `maxBlocks` and `minBand`                                                        |
@@ -167,20 +167,31 @@ The same text is appended to the job summary. A missing or invalid event fails t
 
 Node.js 24 LTS is the runtime for this workflow. The job timeout is 15 minutes. A new commit to the same pull request cancels the previous run.
 
+## Diff processing limitations
+
+`processPullRequestDiff` and `createGitHubClient` perform the retrieval. `createFoundationPipeline` does not, and the pull request workflow does not call either one.
+
+- File text comes from the Contents API with `ref` set to the immutable base or head commit SHA. Added files are not fetched at the base SHA. Deleted files are not fetched at the head SHA. A rename is fetched from `previous_filename` at the base SHA and from the new path at the head SHA. A rename without `previous_filename` is marked unsupported and incomplete.
+- An omitted or empty patch is `missing`. A patch that does not match its hunk headers, or GitHub's addition and deletion counts, is `invalid`. Neither case is reported as a complete analysis. A partial file list is not returned: if a next page remains after 30 pages of 100 files, the request throws.
+- Content larger than 1,000,000 bytes, or a GitHub 403 that says the blob is too large, is `oversized` and the pull request is incomplete. A NUL byte in the first 8,000 bytes, or bytes that are not valid UTF-8, is `binary`. Directories, symlinks, and submodules are `unsupported` and are not followed.
+- Generated-file detection is a path heuristic (`dist/`, `build/`, `coverage/`, `generated/`, minified files, source maps, and common lockfiles). That flag does not by itself make the diff incomplete.
+- The two sides of a file are fetched one after the other. Responses 429, 502, 503, and 504, and a 403 that is a rate limit, retry up to 3 times when the wait is at most 10 seconds. A later failure throws. The result is not marked complete.
+- This step does not analyze attention and does not publish a GitHub comment.
+
 ## Security
 
-- Put `GITHUB_TOKEN`, `ANTHROPIC_API_KEY`, and `OPENAI_API_KEY` in the environment when a later milestone needs them.
+- Put `GITHUB_TOKEN` in the environment when a caller retrieves a pull request diff. Put `ANTHROPIC_API_KEY` and `OPENAI_API_KEY` in the environment when a later milestone needs them.
 - Commit `.env.example` with empty placeholders. Do not commit `.env`.
 - Do not commit private repository contents or pull request patches.
 - `CI` requests `contents: read` only. `PR Review Focus` requests `contents: read` and `pull-requests: read`.
 
 ## Milestones
 
-Ship these in order. Milestone 1 is the current tree. Milestones 2–9 are not started.
+Ship these in order. Milestones 1–3 are in the tree. Milestones 4–9 are not started.
 
 1. **Foundation and contracts** — Current. Tooling, module boundaries, validated configuration, and fail-closed pipeline stages.
-2. **GitHub pull request intake** — Not started. Read pull request metadata, changed files, patches, and head file text with the GitHub REST API.
-3. **Diff model** — Not started. Parse unified diffs into files, hunks, and changed line ranges.
+2. **GitHub pull request intake** — Current. Read pull request metadata, paginated changed files, patches, and file contents at the base and head commit SHAs.
+3. **Diff model** — Current. Normalize unified diffs into files, hunks, changed line ranges, and base and head source, and mark missing information.
 4. **Logical blocks** — Not started. Use Tree-sitter to map changed lines onto functions, methods, classes, and other blocks.
 5. **Attention analysis** — Not started. Decide which blocks deserve a human and record the attention reason. Report where to look, not defects.
 6. **Prioritization** — Not started. Rank assessed blocks and keep the set allowed by the review-focus policy.

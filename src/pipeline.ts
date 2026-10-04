@@ -1,6 +1,6 @@
 import { createUnimplementedAnalyzer } from "./analysis/index.js";
 import type { AssessBlocksRequest, BlockAssessment } from "./analysis/types.js";
-import { createUnimplementedDiffParser } from "./diff/index.js";
+import { createDiffParser } from "./diff/index.js";
 import type { FileDiff } from "./diff/types.js";
 import { createUnimplementedGitHubClient } from "./github/index.js";
 import type {
@@ -31,7 +31,7 @@ export interface ReviewPipeline {
 
 export function createFoundationPipeline(): ReviewPipeline {
   const github = createUnimplementedGitHubClient();
-  const diffs = createUnimplementedDiffParser();
+  const diffs = createDiffParser();
   const parser = createUnimplementedCodeParser();
   const analysis = createUnimplementedAnalyzer();
   const prioritization = createUnimplementedPrioritizer();

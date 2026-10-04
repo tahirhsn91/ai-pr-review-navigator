@@ -1,6 +1,15 @@
 export { loadConfig, parseEnvironment, parseReviewFocusPolicy } from "./config/index.js";
 export type { AppConfig, LoadConfigOptions, ReviewFocusPolicy } from "./config/index.js";
-export type { DiffHunk, DiffLine, DiffParser, FileDiff } from "./diff/types.js";
+export type {
+  DiffHunk,
+  DiffLine,
+  DiffParser,
+  FileDiff,
+  FileSource,
+  ProcessedFileChange,
+  PullRequestDiff,
+} from "./diff/types.js";
+export { createDiffParser, processPullRequestDiff } from "./diff/index.js";
 export type {
   FileTextRequest,
   GitHubClient,
@@ -10,6 +19,7 @@ export type {
   PullRequestSnapshot,
 } from "./github/types.js";
 export { PULL_REQUEST_FILE_STATUSES } from "./github/types.js";
+export { createGitHubClient, GitHubRequestError, MAX_FILE_BYTES } from "./github/index.js";
 export { PullRequestEventError } from "./github/index.js";
 export {
   PULL_REQUEST_EVENT_ACTIONS,

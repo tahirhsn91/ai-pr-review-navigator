@@ -21,6 +21,8 @@ export interface PullRequestFile {
   readonly status: PullRequestFileStatus;
   readonly patch?: string;
   readonly previousFilename?: string;
+  readonly additions?: number;
+  readonly deletions?: number;
 }
 
 export interface PullRequestSnapshot {
@@ -38,7 +40,15 @@ export interface FileTextRequest {
   readonly sha: string;
 }
 
+export type FileContentResult =
+  | { readonly status: "present"; readonly text: string; readonly byteLength: number }
+  | { readonly status: "absent" }
+  | { readonly status: "binary"; readonly byteLength: number }
+  | { readonly status: "oversized"; readonly byteLength: number }
+  | { readonly status: "unsupported"; readonly reason: string };
+
 export interface GitHubClient {
   fetchPullRequest(ref: PullRequestRef): Promise<PullRequestSnapshot>;
   fetchFileText(request: FileTextRequest): Promise<string>;
+  fetchFileContent(request: FileTextRequest): Promise<FileContentResult>;
 }
