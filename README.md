@@ -2,7 +2,7 @@
 
 Review Navigator is a GitHub-native tool that finds the logical code blocks in a pull request that deserve a human reviewer. It orders attention. It does not hunt for bugs, assign defect severity, or propose patches.
 
-The library loads and validates configuration, retrieves a pull request diff from the GitHub REST API when a caller supplies a token, maps changed lines in TypeScript and JavaScript onto logical blocks, and can ask Claude or GPT whether a candidate block changes behavior. Ranking, LLM explanations of selected blocks, and comment publishing are not implemented. Those pipeline stages still fail closed.
+The library loads and validates configuration, retrieves a pull request diff from the GitHub REST API when a caller supplies a token, maps changed lines in TypeScript and JavaScript onto logical blocks, asks Claude or GPT whether a candidate block changes behavior, and ranks those blocks into review groups. LLM explanations of selected blocks and comment publishing are not implemented. Those pipeline stages still fail closed.
 
 `.github/workflows/pr-review-focus.yml` is an unprivileged pull request workflow. It runs the project checks and logs the pull request number, base SHA, head SHA, and event type from the Actions event. That workflow does not call the GitHub REST API and does not need an LLM secret.
 
@@ -31,7 +31,7 @@ npm test
 npm run build
 ```
 
-`npm run format` rewrites files with Prettier. The foundation has no CLI that reviews a pull request. `createFoundationPipeline()` throws `NotImplementedError` from the stages that are not implemented. `assessBlocks` runs semantic analysis when the caller supplies a provider.
+`npm run format` rewrites files with Prettier. The foundation has no CLI that reviews a pull request. `createFoundationPipeline()` throws `NotImplementedError` from the stages that are not implemented. `assessBlocks` runs semantic analysis when the caller supplies a provider. `rankBlocks` selects and ranks assessed blocks.
 
 After `npm run build`, `node dist/github/report-pull-request-event.js` prints pull request metadata when `GITHUB_EVENT_PATH` points at a GitHub `pull_request` event file.
 
@@ -64,8 +64,8 @@ Environment variables:
 `.github/review-focus.yml` is the review policy:
 
 - `version` must be `1`.
-- `selection.maxBlocks` is how many blocks a later ranking step may keep (1–100). The shipped default is 12.
-- `selection.minBand` is the lowest band a later ranking step may keep: `low`, `medium`, or `high`. The shipped default is `medium`.
+- `selection.maxBlocks` is how many blocks the summary displays (1–100). The shipped default is 12. Important blocks past that limit remain in the report as overflow.
+- `selection.minBand` is the lowest band the summary displays: `low`, `medium`, or `high`. The shipped default is `medium`. Low-priority blocks stay in the report when this band hides them from the summary.
 - `ignore` lists glob patterns. Matching is not implemented yet.
 - `languages` lists Tree-sitter grammar names to keep. Parsing is not implemented yet. The shipped file lists `typescript` and `javascript`.
 - `attention` lists enabled reasons. A confident assessment records one of these reasons only when that code appears in the model's behavior explanation.
@@ -105,7 +105,7 @@ Filter `ignore` and `languages` before parsing. The parser maps syntax onto chan
 | `src/diff`           | Files, hunks, changed lines, and base and head source for a pull request diff                      |
 | `src/parser`         | TypeScript and JavaScript logical blocks from the base and head syntax trees                       |
 | `src/analysis`       | Behavioral assessment of a changed logical block                                                   |
-| `src/prioritization` | Rank blocks and apply `maxBlocks` and `minBand`                                                    |
+| `src/prioritization` | Select and rank changed blocks into review groups under the policy budget                          |
 | `src/llm`            | Claude or GPT completions for that assessment. Explanations of selected blocks are not implemented |
 | `src/publisher`      | Post the focus report on the pull request                                                          |
 | `src/shared`         | Errors, line ranges, and shared vocabulary                                                         |
@@ -230,6 +230,25 @@ The model must return one JSON object with `blockId`, `behaviorChanged`, `busine
 
 Each request uses a 20 second timeout, at most three attempts, and retries only transient HTTP statuses and timeouts. The input budget is 3,000 estimated tokens and the output budget is 600 tokens. The estimated cost ceiling is $0.05 for one block. Logs record the provider, model, outcome, attempt, and status code. They omit the API key and the source text.
 
+## Prioritization
+
+`createPrioritizer().rank` turns assessed blocks into one validated report. The same inputs produce the same report. Comments are not published from this stage.
+
+The report names `baseSha`, `headSha`, and an `analysisStatus` of `complete`, `partial`, or `unavailable`. Every selected block keeps its block id, the changed-line range, and the logical block range that contains it. A block with no changed lines is excluded. A changed range that does not sit inside the block is excluded rather than given an invented location.
+
+Groups:
+
+| Group                | Summary band | When it is used                                                                                                                                                            |
+| -------------------- | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `must_review`        | `high`       | A reliable behavior change in authorization, a business calculation, data integrity, or another significant or critical impact. A one-line authorization change qualifies. |
+| `review_if_relevant` | `medium`     | A reliable behavior change with narrower impact. A loop is not must-review unless repository criticality marks that change critical.                                       |
+| `low_priority`       | `low`        | High-confidence evidence that behavior did not change, such as formatting, a mechanical rename, or routine boilerplate.                                                    |
+| `needs_context`      | `medium`     | Missing analysis, low confidence, uncertainty, or an unknown impact. This group is never used to shrink the summary.                                                       |
+
+`displayed` is the summary. It keeps `needs_context` visible at every `minBand`, hides `low_priority` when `minBand` is above `low`, and stops at `maxBlocks`. Blocks that are important enough for the summary but sit past `maxBlocks` are listed in `overflow` and counted. Low-priority blocks that are hidden remain in `groups.lowPriority`.
+
+Deduplication prefers the smallest understandable block when changed ranges overlap. It expands to the enclosing block when that block's assessment requests surrounding context. Overlapping partial ranges are merged, and the report lists the kept id, the absorbed ids, and the duplicate ids.
+
 ## Security
 
 - Put `GITHUB_TOKEN` in the environment when a caller retrieves a pull request diff. Put `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` in the environment when semantic analysis calls Claude or GPT.
@@ -239,14 +258,14 @@ Each request uses a 20 second timeout, at most three attempts, and retries only 
 
 ## Milestones
 
-Ship these in order. Milestones 1–5 are in the tree. Milestones 6–9 are not started.
+Ship these in order. Milestones 1–6 are in the tree. Milestones 7–9 are not started.
 
 1. **Foundation and contracts** — Current. Tooling, module boundaries, validated configuration, and fail-closed pipeline stages.
 2. **GitHub pull request intake** — Current. Read pull request metadata, paginated changed files, patches, and file contents at the base and head commit SHAs.
 3. **Diff model** — Current. Normalize unified diffs into files, hunks, changed line ranges, and base and head source, and mark missing information.
 4. **Logical blocks** — Current. Map changed lines in TypeScript and JavaScript onto functions, branches, loops, and the other structures in `LOGICAL_BLOCK_KINDS`.
 5. **Attention analysis** — Current. Ask Claude or GPT whether a candidate block changes behavior, validate the JSON, and keep an uncertain result explicit.
-6. **Prioritization** — Not started. Rank assessed blocks and keep the set allowed by the review-focus policy.
+6. **Prioritization** — Current. Rank assessed blocks into must-review, review-if-relevant, low-priority, and needs-context groups, and keep overflow visible when the summary budget is full.
 7. **LLM explanations** — Not started. Ask Claude or GPT to explain why a selected block deserves attention.
 8. **Publication** — Not started. Post one pull request review comment that points at the selected blocks.
 9. **GitHub Action** — Not started. Run the pipeline for a pull request and publish the focus report.

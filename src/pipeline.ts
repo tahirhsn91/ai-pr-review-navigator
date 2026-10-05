@@ -13,8 +13,8 @@ import { unimplementedExplainAttention } from "./llm/index.js";
 import type { AttentionExplanation, ExplainAttentionRequest } from "./llm/types.js";
 import { createCodeParser } from "./parser/index.js";
 import type { ChangedBlockRequest, LogicalBlock } from "./parser/types.js";
-import { createUnimplementedPrioritizer } from "./prioritization/index.js";
-import type { RankBlocksRequest, RankedBlock } from "./prioritization/types.js";
+import { createPrioritizer } from "./prioritization/index.js";
+import type { FocusReport, RankBlocksRequest } from "./prioritization/types.js";
 import { createUnimplementedPublisher } from "./publisher/index.js";
 import type { PublishReceipt, ReviewFocusReport } from "./publisher/types.js";
 
@@ -24,7 +24,7 @@ export interface ReviewPipeline {
   parseDiffs(files: readonly PullRequestFile[]): readonly FileDiff[];
   findChangedBlocks(input: ChangedBlockRequest): Promise<readonly LogicalBlock[]>;
   assessBlocks(input: AssessBlocksRequest): Promise<readonly BlockAssessment[]>;
-  rankBlocks(input: RankBlocksRequest): readonly RankedBlock[];
+  rankBlocks(input: RankBlocksRequest): FocusReport;
   explainAttention(request: ExplainAttentionRequest): Promise<AttentionExplanation>;
   publish(report: ReviewFocusReport): Promise<PublishReceipt>;
 }
@@ -34,7 +34,7 @@ export function createFoundationPipeline(): ReviewPipeline {
   const diffs = createDiffParser();
   const parser = createCodeParser();
   const analysis = createSemanticAnalyzer();
-  const prioritization = createUnimplementedPrioritizer();
+  const prioritization = createPrioritizer();
   const explainAttention = unimplementedExplainAttention();
   const publisher = createUnimplementedPublisher();
 

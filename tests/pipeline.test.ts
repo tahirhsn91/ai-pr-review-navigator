@@ -98,7 +98,14 @@ describe("foundation pipeline", () => {
       {
         name: "rankBlocks",
         feature: "Prioritizer.rank",
-        run: () => pipeline.rankBlocks({ blocks: [block], assessments: [assessment], policy }),
+        run: () =>
+          pipeline.rankBlocks({
+            baseSha: "a".repeat(40),
+            headSha: "b".repeat(40),
+            blocks: [block],
+            assessments: [assessment],
+            policy,
+          }),
       },
       {
         name: "explainAttention",
@@ -125,7 +132,8 @@ describe("foundation pipeline", () => {
       if (
         stage.name === "parseDiffs" ||
         stage.name === "findChangedBlocks" ||
-        stage.name === "assessBlocks"
+        stage.name === "assessBlocks" ||
+        stage.name === "rankBlocks"
       ) {
         continue;
       }
@@ -218,6 +226,25 @@ describe("foundation pipeline", () => {
     expect(assessments).toHaveLength(1);
     expect(assessments[0]?.blockId).toBe(block.id);
     expect(assessments[0]?.businessImpact).toBe("significant");
+  });
+
+  it("ranks a behavior change ahead of the display budget", () => {
+    const pipeline = createFoundationPipeline();
+    const policy = loadConfig({
+      cwd: process.cwd(),
+      env: { GITHUB_TOKEN: "test-token", LLM_PROVIDER: "none" },
+    }).policy;
+    const report = pipeline.rankBlocks({
+      baseSha: "a".repeat(40),
+      headSha: "b".repeat(40),
+      blocks: [block],
+      assessments: [assessment],
+      policy,
+    });
+    expect(report.analysisStatus).toBe("complete");
+    expect(report.groups.mustReview.map((item) => item.blockId)).toEqual([block.id]);
+    expect(report.displayed[0]?.range).toEqual({ startLine: 2, endLine: 3 });
+    expect(report.overflow).toEqual([]);
   });
 
   it("fails closed when semantic analysis has no provider", async () => {
