@@ -280,6 +280,7 @@ This workflow has not been executed on GitHub. The checks below are repository c
 3. Create an Actions variable `LLM_PROVIDER` with `claude`, `gpt`, or `none`. Store `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` as an Actions secret. Do not put either secret on the read-only pull request workflow.
 4. Keep the GitHub-provided `GITHUB_TOKEN`. This repository does not use a GitHub App. Write permission is only on the two trusted workflows, and both check out the trusted ref.
 5. Adjust `.github/review-focus.yml` for languages, ignore paths, and the display budget. A manual rerun is **Actions → Reanalyze Review Focus → Run workflow**, with the pull request number.
+6. To review a pull request in another repository, install the GitHub App there, store `APP_ID` as an Actions variable and `APP_PRIVATE_KEY` as an Actions secret in this repository, then use **Actions → Review another repository → Run workflow**. Enter the other account, the repository name, and the pull request number. That workflow is on the default branch before it appears in the Actions list.
 
 ### Deployment checklist
 
