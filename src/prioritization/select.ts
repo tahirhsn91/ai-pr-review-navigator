@@ -161,14 +161,15 @@ function place(
   changed: LineRange | null,
   blockRange: LineRange | null,
 ): Pick<Candidate, "block" | "side" | "range" | "blockRange"> | null {
-  if (changed === null || blockRange === null) {
+  const located = blockRange ?? changed;
+  if (changed === null || located === null) {
     return null;
   }
-  const range = intersection(changed, blockRange);
+  const range = intersection(changed, located);
   if (range === null) {
     return null;
   }
-  return { block, side, range, blockRange };
+  return { block, side, range, blockRange: located };
 }
 
 function dedupe(candidates: Candidate[]): {

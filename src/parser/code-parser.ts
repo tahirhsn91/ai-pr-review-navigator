@@ -1,3 +1,4 @@
+import type { LineRange } from "../shared/location.js";
 import { unimplemented } from "../shared/unimplemented.js";
 import { isIgnored } from "./ignore.js";
 import { diffLineNumbers, lineNumbers, matchChangedBlocks } from "./match.js";
@@ -6,6 +7,7 @@ import { assertLogicalBlocks } from "./schema.js";
 import { createTypeScriptSyntaxParser } from "./tree.js";
 import type {
   ChangedBlockRequest,
+  ChangedLineRange,
   CodeParser,
   LogicalBlock,
   ParseStatus,
@@ -65,7 +67,7 @@ function blocksForDiff(
   const headLines = lineNumbers(lineRanges.head, source?.headText ?? null);
   if (baseLines.length === 0 && headLines.length === 0) {
     if (hasRanges || diff.patchStatus !== "parsed" || !diff.lineMappingComplete) {
-      return [uncertain(diff, diff.patchStatus === "binary" ? "unsupported" : "unmapped")];
+      return [uncertain(diff, diff.patchStatus === "binary" ? "unsupported" : "unmapped", source)];
     }
     return [];
   }
@@ -108,7 +110,11 @@ function blocksForDiff(
   });
 }
 
-function uncertain(diff: FileDiff, parseStatus: "unmapped" | "unsupported"): LogicalBlock {
+function uncertain(
+  diff: FileDiff,
+  parseStatus: "unmapped" | "unsupported",
+  source: SourceFile | undefined,
+): LogicalBlock {
   return {
     id: `${diff.path}#${parseStatus}`,
     path: diff.path,
@@ -118,11 +124,33 @@ function uncertain(diff: FileDiff, parseStatus: "unmapped" | "unsupported"): Log
     context: [],
     baseRange: null,
     headRange: null,
-    changedLines: [],
+    changedLines: unmappedLines(diff, source),
     change: diff.status === "added" ? "new" : diff.status === "removed" ? "removed" : "modified",
     confidence: "low",
     parseStatus,
   };
+}
+
+function unmappedLines(
+  diff: FileDiff,
+  source: SourceFile | undefined,
+): readonly ChangedLineRange[] {
+  const head = textSpan(source?.headText ?? null);
+  const base = textSpan(source?.baseText ?? null);
+  if (diff.status === "removed") {
+    return base === null ? [] : [{ side: "base", range: base }];
+  }
+  if (head !== null) {
+    return [{ side: "head", range: head }];
+  }
+  return base === null ? [] : [{ side: "base", range: base }];
+}
+
+function textSpan(text: string | null): LineRange | null {
+  if (text === null || text.length === 0) {
+    return null;
+  }
+  return { startLine: 1, endLine: text.split("\n").length };
 }
 
 function sourceFor(sources: readonly SourceFile[], path: string): SourceFile | undefined {
