@@ -15,6 +15,10 @@ on:
         description: Path to a review-focus report JSON file in the trusted checkout
         required: true
         type: string
+      head_sha:
+        description: Head SHA the report was analyzed against. Leave empty to skip the stale-head check.
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -65,3 +69,4 @@ jobs:
           GITHUB_REPOSITORY: ${{ github.repository }}
           PUBLISH_PULL_REQUEST: ${{ inputs.pull_request }}
           REVIEW_FOCUS_REPORT: ${{ inputs.report_path }}
+          PUBLISH_HEAD_SHA: ${{ inputs.head_sha }}
