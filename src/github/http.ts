@@ -95,7 +95,7 @@ export function readNextLink(header: string | null): string | undefined {
 export async function readGitHubJson(response: Response, token: string): Promise<unknown> {
   const text = await response.text();
   if (!response.ok) {
-    throw new GitHubRequestError(failureMessage(response.status, text, token));
+    throw new GitHubRequestError(failureMessage(response.status, text, token, requestPath(response)));
   }
   try {
     return JSON.parse(text) as unknown;
@@ -167,17 +167,29 @@ function retryDelayMs(response: Response, attempt: number): number {
   return 250 * attempt;
 }
 
-function failureMessage(status: number, body: string, token: string): string {
-  let detail = `GitHub request failed (${status}).`;
+function failureMessage(status: number, body: string, token: string, path: string): string {
+  const where = path.length > 0 ? ` ${path}` : "";
+  let detail = `GitHub request failed (${status})${where}.`;
   try {
     const parsed: unknown = JSON.parse(body);
     if (isRecord(parsed) && typeof parsed.message === "string") {
-      detail = `GitHub request failed (${status}). ${parsed.message}`;
+      detail = `GitHub request failed (${status})${where}. ${parsed.message}`;
     }
   } catch {
-    detail = `GitHub request failed (${status}).`;
+    detail = `GitHub request failed (${status})${where}.`;
   }
   return redactSecret(detail, token);
+}
+
+function requestPath(response: Response): string {
+  if (response.url.length === 0) {
+    return "";
+  }
+  try {
+    return new URL(response.url).pathname;
+  } catch {
+    return "";
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -77,7 +77,8 @@ jobs:
       - name: Review the other repository
         run: node dist/reanalyze-pull-request.js
         env:
-          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+          REVIEW_GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+          GITHUB_TOKEN: ""
           GH_TOKEN: ""
           GITHUB_REPOSITORY: ${{ inputs.owner }}/${{ inputs.repository }}
           REVIEW_PULL_REQUEST: ${{ inputs.pull_request }}

@@ -272,7 +272,8 @@ describe("review another repository workflow", () => {
     });
     const review = job?.steps.find((step) => step.run === "node dist/reanalyze-pull-request.js");
     expect(review?.env).toMatchObject({
-      GITHUB_TOKEN: "${{ steps.app-token.outputs.token }}",
+      REVIEW_GITHUB_TOKEN: "${{ steps.app-token.outputs.token }}",
+      GITHUB_TOKEN: "",
       GH_TOKEN: "",
       GITHUB_REPOSITORY: "${{ inputs.owner }}/${{ inputs.repository }}",
       REVIEW_PULL_REQUEST: "${{ inputs.pull_request }}",
