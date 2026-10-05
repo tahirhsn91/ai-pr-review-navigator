@@ -1,6 +1,7 @@
 import type { ReviewFocusItem, ReviewFocusReport } from "./types.js";
 
 export const SUMMARY_MARKER = "<!-- review-navigator:summary -->";
+export const INCOMPLETE_MARKER = "<!-- review-navigator:incomplete -->";
 const INLINE_PREFIX = "<!-- review-navigator:inline ";
 
 const GROUP_TITLE = {
@@ -45,6 +46,7 @@ export function renderSummary(report: ReviewFocusReport): string {
     `Base: \`${report.baseSha}\``,
     `Head: \`${report.headSha}\``,
     `Status: ${report.analysisStatus}`,
+    ...statusNote(report.analysisStatus),
     "",
     "Priorities indicate review importance, not verified defects.",
     "",
@@ -79,6 +81,16 @@ export function renderInline(report: ReviewFocusReport, block: ReviewFocusItem):
   }
   lines.push("", "This marks review importance, not a verified defect.");
   return lines.join("\n");
+}
+
+function statusNote(status: ReviewFocusReport["analysisStatus"]): string[] {
+  if (status === "complete") {
+    return [];
+  }
+  if (status === "unavailable") {
+    return ["", "Analysis did not finish. Listed blocks are uncertain."];
+  }
+  return ["", "Analysis is incomplete."];
 }
 
 function section(

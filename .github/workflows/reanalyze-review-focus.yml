@@ -1,0 +1,77 @@
+# Trusted reanalysis workflow.
+# Runs after the read-only PR Review Focus workflow completes, and can also be
+# dispatched by hand. The job checks out the default-branch ref and does not
+# run pull request code. A cancelled read-only run does not start this job.
+
+name: Reanalyze Review Focus
+
+on:
+  workflow_run:
+    workflows: ["PR Review Focus"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      pull_request:
+        description: Pull request number
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: reanalyze-review-focus-${{ github.repository }}-${{ github.event.workflow_run.pull_requests[0].number || inputs.pull_request }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash --noprofile --norc -euo pipefail {0}
+
+jobs:
+  reanalyze:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (
+        github.event.workflow_run.event == 'pull_request' &&
+        github.event.workflow_run.conclusion != 'cancelled' &&
+        github.event.workflow_run.conclusion != 'skipped' &&
+        github.event.workflow_run.pull_requests[0].number != ''
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out trusted ref
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.ref }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+        env:
+          GITHUB_TOKEN: ""
+          GH_TOKEN: ""
+
+      - name: Build
+        run: npm run build
+        env:
+          GITHUB_TOKEN: ""
+          GH_TOKEN: ""
+
+      - name: Reanalyze pull request
+        run: node dist/reanalyze-pull-request.js
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GH_TOKEN: ""
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          REVIEW_PULL_REQUEST: ${{ github.event.workflow_run.pull_requests[0].number || inputs.pull_request }}
+          LLM_PROVIDER: ${{ vars.LLM_PROVIDER || 'none' }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
