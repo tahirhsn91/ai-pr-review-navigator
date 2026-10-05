@@ -2,7 +2,7 @@
 
 Review Navigator is a GitHub-native tool that finds the logical code blocks in a pull request that deserve a human reviewer. It orders attention. It does not hunt for bugs, assign defect severity, or propose patches.
 
-The library loads and validates configuration, retrieves a pull request diff from the GitHub REST API when a caller supplies a token, and maps changed lines in TypeScript and JavaScript onto logical blocks. Ranking, LLM explanations, and comment publishing are not implemented. Those pipeline stages still fail closed.
+The library loads and validates configuration, retrieves a pull request diff from the GitHub REST API when a caller supplies a token, maps changed lines in TypeScript and JavaScript onto logical blocks, and can ask Claude or GPT whether a candidate block changes behavior. Ranking, LLM explanations of selected blocks, and comment publishing are not implemented. Those pipeline stages still fail closed.
 
 `.github/workflows/pr-review-focus.yml` is an unprivileged pull request workflow. It runs the project checks and logs the pull request number, base SHA, head SHA, and event type from the Actions event. That workflow does not call the GitHub REST API and does not need an LLM secret.
 
@@ -31,7 +31,7 @@ npm test
 npm run build
 ```
 
-`npm run format` rewrites files with Prettier. The foundation has no CLI that reviews a pull request. `createFoundationPipeline()` throws `NotImplementedError` from every stage.
+`npm run format` rewrites files with Prettier. The foundation has no CLI that reviews a pull request. `createFoundationPipeline()` throws `NotImplementedError` from the stages that are not implemented. `assessBlocks` runs semantic analysis when the caller supplies a provider.
 
 After `npm run build`, `node dist/github/report-pull-request-event.js` prints pull request metadata when `GITHUB_EVENT_PATH` points at a GitHub `pull_request` event file.
 
@@ -68,7 +68,8 @@ Environment variables:
 - `selection.minBand` is the lowest band a later ranking step may keep: `low`, `medium`, or `high`. The shipped default is `medium`.
 - `ignore` lists glob patterns. Matching is not implemented yet.
 - `languages` lists Tree-sitter grammar names to keep. Parsing is not implemented yet. The shipped file lists `typescript` and `javascript`.
-- `attention` lists enabled reasons. Detection is not implemented yet. The shipped file enables the full glossary.
+- `attention` lists enabled reasons. A confident assessment records one of these reasons only when that code appears in the model's behavior explanation.
+- `criticality` lists repository statements about what is business-critical. The semantic analyzer forwards those statements to the model. It does not invent rules that are absent from this list. The shipped file names payment capture and account authorization.
 
 Attention glossary:
 
@@ -93,21 +94,21 @@ github -> diff -> parser -> analysis -> prioritization -> llm -> publisher
 shared
 ```
 
-`llm` runs only for blocks prioritization has selected, and only when the provider is `claude` or `gpt`. Until that milestone, `explainAttention` throws for every provider setting, including `none`.
+`analysis` asks an injected model whether each candidate block changes behavior. The model is Claude or GPT when the caller builds one with `createLlmProvider`. `explainAttention` still throws for every provider setting, including `none`, until the explanation milestone. The foundation pipeline does not read an API key and does not call a model by itself.
 
 Filter `ignore` and `languages` before parsing. The parser maps syntax onto changed lines. It does not interpret policy.
 
-| Module               | Responsibility                                                                                 |
-| -------------------- | ---------------------------------------------------------------------------------------------- |
-| `src/config`         | Load and validate environment variables and the review-focus policy with Zod                   |
-| `src/github`         | Pull request event metadata and GitHub REST reads of patches and file contents at a commit SHA |
-| `src/diff`           | Files, hunks, changed lines, and base and head source for a pull request diff                  |
-| `src/parser`         | TypeScript and JavaScript logical blocks from the base and head syntax trees                   |
-| `src/analysis`       | Attention reasons for a logical block                                                          |
-| `src/prioritization` | Rank blocks and apply `maxBlocks` and `minBand`                                                |
-| `src/llm`            | Claude or GPT explanations for blocks already selected                                         |
-| `src/publisher`      | Post the focus report on the pull request                                                      |
-| `src/shared`         | Errors, line ranges, and shared vocabulary                                                     |
+| Module               | Responsibility                                                                                     |
+| -------------------- | -------------------------------------------------------------------------------------------------- |
+| `src/config`         | Load and validate environment variables and the review-focus policy with Zod                       |
+| `src/github`         | Pull request event metadata and GitHub REST reads of patches and file contents at a commit SHA     |
+| `src/diff`           | Files, hunks, changed lines, and base and head source for a pull request diff                      |
+| `src/parser`         | TypeScript and JavaScript logical blocks from the base and head syntax trees                       |
+| `src/analysis`       | Behavioral assessment of a changed logical block                                                   |
+| `src/prioritization` | Rank blocks and apply `maxBlocks` and `minBand`                                                    |
+| `src/llm`            | Claude or GPT completions for that assessment. Explanations of selected blocks are not implemented |
+| `src/publisher`      | Post the focus report on the pull request                                                          |
+| `src/shared`         | Errors, line ranges, and shared vocabulary                                                         |
 
 `src/pipeline.ts` composes those modules. `src/index.ts` is the package entry. Import rules live in `MODULE_IMPORTS` in `src/shared/modules.ts`.
 
@@ -201,22 +202,50 @@ Limitations:
 - No other languages are built in. Register a `LanguageSyntaxParser` for a new extension.
 - This step does not call an LLM and does not publish a review comment.
 
+## Semantic analysis
+
+`createSemanticAnalyzer().assess` reviews each candidate block for a change in behavior. Pass `createLlmProvider(...)` as `provider`. Claude and GPT share that call, so the analysis pipeline does not change when the provider changes.
+
+Build the provider from configuration. `loadConfig()` reads `LLM_PROVIDER`, `LLM_MODEL`, `ANTHROPIC_API_KEY`, and `OPENAI_API_KEY`. Locally those values belong in an untracked `.env`. In GitHub Actions they belong in Actions secrets on a workflow that does not execute untrusted pull request code. `.github/workflows/pr-review-focus.yml` stays unprivileged: it does not receive an LLM secret and it does not call a model. Do not hardcode a key.
+
+```ts
+const config = loadConfig();
+const provider =
+  config.llmProvider === "none"
+    ? undefined
+    : createLlmProvider({
+        provider: config.llmProvider,
+        apiKey: config.llmApiKey,
+        ...(config.llmModel === undefined ? {} : { model: config.llmModel }),
+      });
+```
+
+`LLM_PROVIDER=none` leaves `assessBlocks` without a provider, and the call fails closed with `LlmUnavailableError`. The default Claude model is `claude-sonnet-4-5`. The default GPT model is `gpt-4.1`. Set `LLM_MODEL` when the account needs a different id.
+
+The prompt includes the old and new block text, the changed lines, the enclosing symbol and class or method frames, callers, callees, and tests when the caller supplies them, `criticality` from the review-focus policy, and the diff mapping confidence. Repository text is wrapped as untrusted input. Instructions inside source or documentation do not replace the assessment task.
+
+The model must return one JSON object with `blockId`, `behaviorChanged`, `businessImpact` (`unknown`, `none`, `limited`, `significant`, or `critical`), `reviewReason`, `evidence`, `contextRequired`, `confidence` (`low`, `medium`, or `high`), and `uncertaintyReasons`. Zod checks that object. `blockId` must be the candidate that was sent. A malformed response, a timeout, an unavailable provider, or a budget breach throws. Those failures are not rewritten into a low-priority assessment.
+
+`behaviorChanged: false` is a claim that behavior is unchanged only when `confidence` is `high` and `uncertaintyReasons` is empty. A low-confidence answer cannot use `businessImpact: none`. Missing base and head source stays `unknown` with an uncertainty reason, and the model is not called. A truncated excerpt, an unreliable diff mapping, evidence that cites a line outside the block, or a generic code-quality comment also stays explicitly uncertain.
+
+Each request uses a 20 second timeout, at most three attempts, and retries only transient HTTP statuses and timeouts. The input budget is 3,000 estimated tokens and the output budget is 600 tokens. The estimated cost ceiling is $0.05 for one block. Logs record the provider, model, outcome, attempt, and status code. They omit the API key and the source text.
+
 ## Security
 
-- Put `GITHUB_TOKEN` in the environment when a caller retrieves a pull request diff. Put `ANTHROPIC_API_KEY` and `OPENAI_API_KEY` in the environment when a later milestone needs them.
+- Put `GITHUB_TOKEN` in the environment when a caller retrieves a pull request diff. Put `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` in the environment when semantic analysis calls Claude or GPT.
 - Commit `.env.example` with empty placeholders. Do not commit `.env`.
 - Do not commit private repository contents or pull request patches.
-- `CI` requests `contents: read` only. `PR Review Focus` requests `contents: read` and `pull-requests: read`.
+- `CI` requests `contents: read` only. `PR Review Focus` requests `contents: read` and `pull-requests: read`. That pull request workflow does not get an LLM secret.
 
 ## Milestones
 
-Ship these in order. Milestones 1–4 are in the tree. Milestones 5–9 are not started.
+Ship these in order. Milestones 1–5 are in the tree. Milestones 6–9 are not started.
 
 1. **Foundation and contracts** — Current. Tooling, module boundaries, validated configuration, and fail-closed pipeline stages.
 2. **GitHub pull request intake** — Current. Read pull request metadata, paginated changed files, patches, and file contents at the base and head commit SHAs.
 3. **Diff model** — Current. Normalize unified diffs into files, hunks, changed line ranges, and base and head source, and mark missing information.
 4. **Logical blocks** — Current. Map changed lines in TypeScript and JavaScript onto functions, branches, loops, and the other structures in `LOGICAL_BLOCK_KINDS`.
-5. **Attention analysis** — Not started. Decide which blocks deserve a human and record the attention reason. Report where to look, not defects.
+5. **Attention analysis** — Current. Ask Claude or GPT whether a candidate block changes behavior, validate the JSON, and keep an uncertain result explicit.
 6. **Prioritization** — Not started. Rank assessed blocks and keep the set allowed by the review-focus policy.
 7. **LLM explanations** — Not started. Ask Claude or GPT to explain why a selected block deserves attention.
 8. **Publication** — Not started. Post one pull request review comment that points at the selected blocks.
@@ -224,4 +253,4 @@ Ship these in order. Milestones 1–4 are in the tree. Milestones 5–9 are not 
 
 ## Stack
 
-Node.js, TypeScript in strict mode, npm, GitHub Actions, Zod, Vitest, ESLint, Prettier, the GitHub REST API, and the TypeScript compiler API for logical blocks. Additional languages can register a syntax parser. Explanations will go through an `LlmProvider` for Claude or GPT. The MVP has no web server, dashboard, or database.
+Node.js, TypeScript in strict mode, npm, GitHub Actions, Zod, Vitest, ESLint, Prettier, the GitHub REST API, and the TypeScript compiler API for logical blocks. Additional languages can register a syntax parser. Semantic analysis and later explanations go through an `LlmProvider` for Claude or GPT. The MVP has no web server, dashboard, or database.

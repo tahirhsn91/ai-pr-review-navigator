@@ -30,6 +30,7 @@ export {
 } from "./github/index.js";
 export type { PullRequestEventAction, PullRequestEventMetadata } from "./github/index.js";
 export type { AttentionExplanation, ExplainAttentionRequest, LlmProvider } from "./llm/types.js";
+export { createLlmProvider, LlmRequestError, LlmLimitError } from "./llm/index.js";
 export { createCodeParser, createParserRegistry } from "./parser/index.js";
 export {
   BLOCK_CHANGES,
@@ -55,12 +56,19 @@ export type {
 } from "./parser/types.js";
 export { createFoundationPipeline } from "./pipeline.js";
 export type { ReviewPipeline } from "./pipeline.js";
+export { createSemanticAnalyzer } from "./analysis/index.js";
+export { AnalysisError, LlmUnavailableError } from "./analysis/index.js";
 export type {
+  AnalysisConfidence,
   AssessBlocksRequest,
   AttentionSignal,
   BlockAssessment,
+  BusinessImpact,
   ReviewFocusAnalyzer,
+  SemanticAssessment,
+  SemanticModel,
 } from "./analysis/types.js";
+export { ANALYSIS_CONFIDENCE, BUSINESS_IMPACTS } from "./analysis/types.js";
 export type { Prioritizer, RankBlocksRequest, RankedBlock } from "./prioritization/types.js";
 export type {
   PublishReceipt,

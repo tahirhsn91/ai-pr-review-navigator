@@ -40,6 +40,7 @@ export const reviewFocusPolicySchema = z
     ignore: z.array(z.string().min(1)),
     languages: z.array(languageSchema).nonempty(),
     attention: z.array(z.enum(ATTENTION_REASONS)).nonempty(),
+    criticality: z.array(z.string().min(1).max(240)).max(20).default([]),
   })
   .strict()
   .superRefine((value, context) => {

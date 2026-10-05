@@ -20,7 +20,7 @@ const boundaries = [
   },
   {
     name: "analysis",
-    responsibility: "Owns attention reasons for a logical block.",
+    responsibility: "Owns behavioral assessments of changed logical blocks.",
   },
   {
     name: "prioritization",
@@ -29,7 +29,7 @@ const boundaries = [
   {
     name: "llm",
     responsibility:
-      "Owns Claude and GPT explanations of attention reasons for blocks already selected.",
+      "Owns Claude and GPT completions used for behavioral assessment. Explanations of selected blocks stay unimplemented.",
   },
   {
     name: "publisher",

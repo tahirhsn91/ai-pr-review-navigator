@@ -1,5 +1,5 @@
-# Review focus policy. Listing a reason here records that a future
-# analyzer may emit it. This file does not analyze code.
+# Review focus policy. criticality is configuration the semantic analyzer
+# may read. This file does not rank blocks or report defects.
 version: 1
 selection:
   maxBlocks: 12
@@ -22,3 +22,6 @@ attention:
   - security_boundary
   - wide_span
   - cross_file_coupling
+criticality:
+  - "Payment capture changes what a customer is charged."
+  - "Authorization checks control access to an account."
