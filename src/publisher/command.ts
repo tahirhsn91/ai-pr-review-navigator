@@ -21,6 +21,14 @@ export async function publishReviewFocusFromEnv(
     throw new PublishError("PUBLISH_PULL_REQUEST must be a pull request number.");
   }
   const report = readReport(reportPath, owner, repo, Number(pullRequest));
+  const expectedHead = env.PUBLISH_HEAD_SHA;
+  if (
+    expectedHead !== undefined &&
+    expectedHead.trim().length > 0 &&
+    expectedHead !== report.headSha
+  ) {
+    throw new PublishError("headSha does not match PUBLISH_HEAD_SHA.");
+  }
   const receipt = await createReviewPublisher({ token }).publish(report);
   process.stdout.write(`Published review focus comment ${receipt.commentId}.\n`);
 }

@@ -413,6 +413,10 @@ describe("logical blocks", () => {
         { patchStatus: "missing", lineMappingComplete: false },
       ),
     );
+    const span = {
+      startLine: 1,
+      endLine: "export function gap() {\n  return 1;\n}\n".split("\n").length,
+    };
     expect(blocks).toEqual([
       expect.objectContaining({
         kind: "unknown",
@@ -420,7 +424,7 @@ describe("logical blocks", () => {
         confidence: "low",
         baseRange: null,
         headRange: null,
-        changedLines: [],
+        changedLines: [{ side: "head", range: span }],
       }),
     ]);
   });
