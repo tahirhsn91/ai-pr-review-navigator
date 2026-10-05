@@ -1,0 +1,12 @@
+version: 1
+selection:
+  maxBlocks: 12
+  minBand: medium
+ignore:
+  - "**/dist/**"
+languages:
+  - typescript
+attention:
+  - control_flow
+criticality:
+  - "Payment capture changes what a customer is charged."
