@@ -15,8 +15,13 @@ import { createCodeParser } from "./parser/index.js";
 import type { ChangedBlockRequest, LogicalBlock } from "./parser/types.js";
 import { createPrioritizer } from "./prioritization/index.js";
 import type { FocusReport, RankBlocksRequest } from "./prioritization/types.js";
-import { createUnimplementedPublisher } from "./publisher/index.js";
-import type { PublishReceipt, ReviewFocusReport } from "./publisher/types.js";
+import { PublishUnavailableError } from "./publisher/index.js";
+import type {
+  PublishReceipt,
+  ReviewFocusItem,
+  ReviewFocusReport,
+  ReviewPublisher,
+} from "./publisher/types.js";
 
 export interface ReviewPipeline {
   fetchPullRequest(ref: PullRequestRef): Promise<PullRequestSnapshot>;
@@ -29,14 +34,47 @@ export interface ReviewPipeline {
   publish(report: ReviewFocusReport): Promise<PublishReceipt>;
 }
 
-export function createFoundationPipeline(): ReviewPipeline {
+export interface FoundationPipelineOptions {
+  readonly publisher?: ReviewPublisher;
+}
+
+export function toReviewFocusReport(
+  pullRequest: ReviewFocusReport["pullRequest"],
+  report: FocusReport,
+): ReviewFocusReport {
+  const blocks: ReviewFocusItem[] = [
+    ...report.groups.mustReview,
+    ...report.groups.reviewIfRelevant,
+    ...report.groups.lowPriority,
+    ...report.groups.needsContext,
+  ].map((block) => ({
+    blockId: block.blockId,
+    path: block.path,
+    name: block.name,
+    range: block.range,
+    blockRange: block.blockRange,
+    side: block.side,
+    reviewReason: block.reviewReason,
+    group: block.group,
+  }));
+  return {
+    pullRequest,
+    baseSha: report.baseSha,
+    headSha: report.headSha,
+    analysisStatus: report.analysisStatus,
+    overflowCount: report.counts.overflow,
+    blocks,
+  };
+}
+
+export function createFoundationPipeline(options: FoundationPipelineOptions = {}): ReviewPipeline {
   const github = createUnimplementedGitHubClient();
   const diffs = createDiffParser();
   const parser = createCodeParser();
   const analysis = createSemanticAnalyzer();
   const prioritization = createPrioritizer();
   const explainAttention = unimplementedExplainAttention();
-  const publisher = createUnimplementedPublisher();
+  const publisher = options.publisher;
 
   return {
     fetchPullRequest: (ref) => github.fetchPullRequest(ref),
@@ -46,6 +84,11 @@ export function createFoundationPipeline(): ReviewPipeline {
     assessBlocks: (input) => analysis.assess(input),
     rankBlocks: (input) => prioritization.rank(input),
     explainAttention: (request) => explainAttention(request),
-    publish: (report) => publisher.publish(report),
+    publish: (report) => {
+      if (publisher === undefined) {
+        return Promise.reject(new PublishUnavailableError());
+      }
+      return publisher.publish(report);
+    },
   };
 }

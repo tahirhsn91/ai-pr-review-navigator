@@ -54,8 +54,8 @@ export type {
   SyntaxNode,
   SyntaxTree,
 } from "./parser/types.js";
-export { createFoundationPipeline } from "./pipeline.js";
-export type { ReviewPipeline } from "./pipeline.js";
+export { createFoundationPipeline, toReviewFocusReport } from "./pipeline.js";
+export type { FoundationPipelineOptions, ReviewPipeline } from "./pipeline.js";
 export { createSemanticAnalyzer } from "./analysis/index.js";
 export { AnalysisError, LlmUnavailableError } from "./analysis/index.js";
 export type {
@@ -84,8 +84,12 @@ export type {
   ReviewGroup,
   TestEvidence,
 } from "./prioritization/types.js";
+export { createReviewPublisher, PublishError, PublishUnavailableError } from "./publisher/index.js";
+export { SUMMARY_MARKER } from "./publisher/render.js";
 export type {
   PublishReceipt,
+  PublishedGroup,
+  PublishedStatus,
   ReviewFocusItem,
   ReviewFocusReport,
   ReviewPublisher,

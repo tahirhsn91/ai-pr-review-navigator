@@ -5,6 +5,7 @@ import { createFoundationPipeline } from "../src/pipeline.js";
 import { NotImplementedError } from "../src/shared/errors.js";
 import type { AttentionSignal, BlockAssessment } from "../src/analysis/types.js";
 import { LlmUnavailableError } from "../src/analysis/index.js";
+import { PublishUnavailableError } from "../src/publisher/index.js";
 import type { ReviewFocusReport } from "../src/publisher/types.js";
 import type { LogicalBlock } from "../src/parser/types.js";
 
@@ -42,9 +43,11 @@ const assessment: BlockAssessment = {
 
 const report: ReviewFocusReport = {
   pullRequest: { owner: "example", repo: "demo", number: 1 },
-  headSha: "a".repeat(40),
-  items: [],
-  omittedCount: 0,
+  baseSha: "a".repeat(40),
+  headSha: "b".repeat(40),
+  analysisStatus: "complete",
+  overflowCount: 0,
+  blocks: [],
 };
 
 async function stageError(run: () => unknown): Promise<unknown> {
@@ -133,7 +136,8 @@ describe("foundation pipeline", () => {
         stage.name === "parseDiffs" ||
         stage.name === "findChangedBlocks" ||
         stage.name === "assessBlocks" ||
-        stage.name === "rankBlocks"
+        stage.name === "rankBlocks" ||
+        stage.name === "publish"
       ) {
         continue;
       }
@@ -245,6 +249,11 @@ describe("foundation pipeline", () => {
     expect(report.groups.mustReview.map((item) => item.blockId)).toEqual([block.id]);
     expect(report.displayed[0]?.range).toEqual({ startLine: 2, endLine: 3 });
     expect(report.overflow).toEqual([]);
+  });
+
+  it("fails closed when publishing has no GitHub publisher", async () => {
+    const pipeline = createFoundationPipeline();
+    await expect(pipeline.publish(report)).rejects.toBeInstanceOf(PublishUnavailableError);
   });
 
   it("fails closed when semantic analysis has no provider", async () => {

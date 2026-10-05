@@ -13,6 +13,8 @@ export interface GitHubHttpOptions {
   readonly sleep?: (milliseconds: number) => Promise<void>;
   readonly maxRetries?: number;
   readonly maxWaitMs?: number;
+  readonly method?: "GET" | "POST" | "PATCH" | "DELETE";
+  readonly body?: unknown;
 }
 
 const defaultSleep = (milliseconds: number): Promise<void> =>
@@ -36,7 +38,9 @@ export async function githubRequest(url: string, options: GitHubHttpOptions): Pr
     let response: Response;
     try {
       response = await fetchImpl(currentUrl, {
-        headers: githubHeaders(options.token),
+        method: options.method ?? "GET",
+        headers: githubHeaders(options.token, options.body !== undefined),
+        body: options.body === undefined ? null : JSON.stringify(options.body),
         redirect: "manual",
       });
     } catch {
@@ -106,13 +110,17 @@ export function assertAllowedUrl(url: string, apiBaseUrl: string): void {
   }
 }
 
-function githubHeaders(token: string): Headers {
-  return new Headers({
+function githubHeaders(token: string, hasBody: boolean): Headers {
+  const headers = new Headers({
     Accept: "application/vnd.github+json",
     Authorization: `Bearer ${token}`,
     "User-Agent": "ai-pr-review-navigator",
     "X-GitHub-Api-Version": "2022-11-28",
   });
+  if (hasBody) {
+    headers.set("Content-Type", "application/json");
+  }
+  return headers;
 }
 
 function sameOrigin(url: string, apiBaseUrl: string): boolean {
