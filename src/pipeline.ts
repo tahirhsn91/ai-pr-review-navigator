@@ -263,14 +263,19 @@ async function recover(
   error: unknown,
   publishEmpty = true,
 ): Promise<ReviewRunResult> {
-  const kept = await keepPriorSummary({
-    token,
-    owner: ref.owner,
-    repo: ref.repo,
-    number: ref.number,
-    ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
-    ...(options.sleep === undefined ? {} : { sleep: options.sleep }),
-  });
+  let kept: "preserved" | "absent";
+  try {
+    kept = await keepPriorSummary({
+      token,
+      owner: ref.owner,
+      repo: ref.repo,
+      number: ref.number,
+      ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
+      ...(options.sleep === undefined ? {} : { sleep: options.sleep }),
+    });
+  } catch (preserveError) {
+    throw error instanceof ReviewNavigatorError ? error : preserveError;
+  }
   if (kept === "preserved") {
     return {
       outcome: "preserved",
@@ -392,6 +397,20 @@ function clientOptions(token: string, options: ReanalyzeOptions) {
     token,
     ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
     ...(options.sleep === undefined ? {} : { sleep: options.sleep }),
+  };
+}
+
+export function reanalyzeProcessEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const reviewToken = env.REVIEW_GITHUB_TOKEN;
+  const repository = env.REVIEW_REPOSITORY;
+  return {
+    ...env,
+    ...(reviewToken !== undefined && reviewToken.trim().length > 0
+      ? { GITHUB_TOKEN: reviewToken }
+      : {}),
+    ...(repository !== undefined && repository.trim().length > 0
+      ? { GITHUB_REPOSITORY: repository.trim() }
+      : {}),
   };
 }
 

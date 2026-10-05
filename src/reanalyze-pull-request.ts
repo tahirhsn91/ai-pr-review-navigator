@@ -1,14 +1,15 @@
-import { reanalyzeFailureMessage, reanalyzePullRequest } from "./pipeline.js";
+import { reanalyzeFailureMessage, reanalyzeProcessEnv, reanalyzePullRequest } from "./pipeline.js";
 
-const reviewToken = process.env.REVIEW_GITHUB_TOKEN;
-const env =
-  reviewToken !== undefined && reviewToken.trim().length > 0
-    ? { ...process.env, GITHUB_TOKEN: reviewToken }
-    : process.env;
+const env = reanalyzeProcessEnv(process.env);
 
 try {
-  if (reviewToken !== undefined && reviewToken.trim().length > 0) {
+  if (process.env.REVIEW_GITHUB_TOKEN?.trim()) {
     process.stdout.write("Using the review app token.\n");
+  }
+  const repository = env.GITHUB_REPOSITORY;
+  const pullRequest = env.REVIEW_PULL_REQUEST;
+  if (repository !== undefined && pullRequest !== undefined) {
+    process.stdout.write(`Reviewing ${repository}#${pullRequest}.\n`);
   }
   const result = await reanalyzePullRequest({ env });
   const lines = [`Review focus ${result.outcome}.`];

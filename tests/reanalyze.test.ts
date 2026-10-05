@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { reanalyzePullRequest } from "../src/pipeline.js";
+import { reanalyzeProcessEnv, reanalyzePullRequest } from "../src/pipeline.js";
 import { GitHubRequestError } from "../src/github/errors.js";
 import type {
   FileContentResult,
@@ -412,5 +412,21 @@ describe("reanalyze pull request", () => {
       }),
     ).rejects.toThrow("REVIEW_PULL_REQUEST is not set.");
     expect(publisher.reports).toEqual([]);
+  });
+
+  it("uses the review repository and app token when both are set", () => {
+    expect(
+      reanalyzeProcessEnv({
+        GITHUB_TOKEN: "job-token",
+        GITHUB_REPOSITORY: "tahirhsn91/ai-pr-review-navigator",
+        REVIEW_GITHUB_TOKEN: "app-token",
+        REVIEW_REPOSITORY: "tahirhsn91/PSX_Scraper",
+        REVIEW_PULL_REQUEST: "135",
+      }),
+    ).toMatchObject({
+      GITHUB_TOKEN: "app-token",
+      GITHUB_REPOSITORY: "tahirhsn91/PSX_Scraper",
+      REVIEW_PULL_REQUEST: "135",
+    });
   });
 });

@@ -275,7 +275,7 @@ describe("review another repository workflow", () => {
       REVIEW_GITHUB_TOKEN: "${{ steps.app-token.outputs.token }}",
       GITHUB_TOKEN: "",
       GH_TOKEN: "",
-      GITHUB_REPOSITORY: "${{ inputs.owner }}/${{ inputs.repository }}",
+      REVIEW_REPOSITORY: "${{ inputs.owner }}/${{ inputs.repository }}",
       REVIEW_PULL_REQUEST: "${{ inputs.pull_request }}",
     });
   });
