@@ -236,6 +236,85 @@ const reanalyzeWorkflowSchema = z
   })
   .passthrough();
 
+describe("review another repository workflow", () => {
+  it("uses the app token for the named repository and keeps the key off the install steps", () => {
+    const text = readFileSync(resolve(".github/workflows/review-another-repository.yml"), "utf8");
+    expect(text).not.toContain("pull_request_target");
+    expect(text).not.toContain("github.token");
+    expect(text).not.toContain("APPROVE");
+    expect(text).toContain("name: Review another repository");
+    expect(text).toContain("workflow_dispatch:");
+    expect(text).toContain("cancel-in-progress: false");
+    expect(text).toContain("ref: ${{ github.ref }}");
+    expect(text).toContain("persist-credentials: false");
+    expect(text).toContain(
+      "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1",
+    );
+    expect(text).toContain("permission-contents: read");
+    expect(text).toContain("permission-issues: write");
+    expect(text).toContain("permission-pull-requests: write");
+
+    const workflow = reviewAnotherRepositorySchema.parse(parse(text));
+    expect(workflow.permissions).toEqual({ contents: "read" });
+    const job = workflow.jobs.review;
+    expect(job?.["timeout-minutes"]).toBe(15);
+    const install = job?.steps.find((step) => step.run === "npm ci");
+    const build = job?.steps.find((step) => step.run === "npm run build");
+    expect(install?.env).toEqual({ GITHUB_TOKEN: "", GH_TOKEN: "" });
+    expect(build?.env).toEqual({ GITHUB_TOKEN: "", GH_TOKEN: "" });
+    const token = job?.steps.find((step) => step.id === "app-token");
+    expect(token?.with).toMatchObject({
+      "app-id": "${{ vars.APP_ID }}",
+      "private-key": "${{ secrets.APP_PRIVATE_KEY }}",
+      owner: "${{ inputs.owner }}",
+      repositories: "${{ inputs.repository }}",
+    });
+    const review = job?.steps.find((step) => step.run === "node dist/reanalyze-pull-request.js");
+    expect(review?.env).toMatchObject({
+      GITHUB_TOKEN: "${{ steps.app-token.outputs.token }}",
+      GH_TOKEN: "",
+      GITHUB_REPOSITORY: "${{ inputs.owner }}/${{ inputs.repository }}",
+      REVIEW_PULL_REQUEST: "${{ inputs.pull_request }}",
+    });
+  });
+});
+
+const reviewAnotherRepositorySchema = z
+  .object({
+    name: z.literal("Review another repository"),
+    on: z
+      .object({
+        workflow_dispatch: z.object({}).passthrough(),
+      })
+      .strict(),
+    permissions: z
+      .object({
+        contents: z.literal("read"),
+      })
+      .strict(),
+    jobs: z
+      .object({
+        review: z
+          .object({
+            "timeout-minutes": z.number(),
+            steps: z.array(
+              z
+                .object({
+                  id: z.string().optional(),
+                  uses: z.string().optional(),
+                  run: z.string().optional(),
+                  with: z.record(z.unknown()).optional(),
+                  env: z.record(z.string()).optional(),
+                })
+                .passthrough(),
+            ),
+          })
+          .passthrough(),
+      })
+      .passthrough(),
+  })
+  .passthrough();
+
 const publishWorkflowSchema = z
   .object({
     on: z
