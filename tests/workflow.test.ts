@@ -157,6 +157,85 @@ describe("publish review focus workflow", () => {
   });
 });
 
+describe("reanalyze review focus workflow", () => {
+  it("analyzes from the trusted checkout and keeps secrets off the install steps", () => {
+    const text = readFileSync(resolve(".github/workflows/reanalyze-review-focus.yml"), "utf8");
+    expect(text).not.toContain("pull_request_target");
+    expect(text).not.toContain("github.event.workflow_run.head_sha");
+    expect(text).not.toContain("github.event.pull_request.head");
+    expect(text).not.toContain("APPROVE");
+    expect(text).toContain('workflows: ["PR Review Focus"]');
+    expect(text).toContain("workflow_dispatch:");
+    expect(text).toContain("cancel-in-progress: false");
+    expect(text).toContain("conclusion != 'cancelled'");
+    expect(text).toContain("ref: ${{ github.ref }}");
+    expect(text).toContain("persist-credentials: false");
+    expect(text).toContain("node dist/reanalyze-pull-request.js");
+    expect(text.split("github.token")).toHaveLength(2);
+
+    const workflow = reanalyzeWorkflowSchema.parse(parse(text));
+    expect(workflow.permissions).toEqual({
+      contents: "read",
+      "pull-requests": "write",
+    });
+    const job = workflow.jobs.reanalyze;
+    expect(job?.["timeout-minutes"]).toBe(15);
+    const checkout = job?.steps.find((step) => step.uses?.startsWith("actions/checkout@"));
+    expect(checkout?.with).toMatchObject({
+      "persist-credentials": false,
+      ref: "${{ github.ref }}",
+    });
+    const install = job?.steps.find((step) => step.run === "npm ci");
+    const build = job?.steps.find((step) => step.run === "npm run build");
+    expect(install?.env).toEqual({ GITHUB_TOKEN: "", GH_TOKEN: "" });
+    expect(build?.env).toEqual({ GITHUB_TOKEN: "", GH_TOKEN: "" });
+    const analyze = job?.steps.find((step) => step.run === "node dist/reanalyze-pull-request.js");
+    expect(analyze?.env).toMatchObject({
+      GITHUB_TOKEN: "${{ github.token }}",
+      GH_TOKEN: "",
+      LLM_PROVIDER: "${{ vars.LLM_PROVIDER || 'none' }}",
+      ANTHROPIC_API_KEY: "${{ secrets.ANTHROPIC_API_KEY }}",
+      OPENAI_API_KEY: "${{ secrets.OPENAI_API_KEY }}",
+    });
+  });
+});
+
+const reanalyzeWorkflowSchema = z
+  .object({
+    on: z
+      .object({
+        workflow_run: z.object({}).passthrough(),
+        workflow_dispatch: z.object({}).passthrough(),
+      })
+      .strict(),
+    permissions: z
+      .object({
+        contents: z.literal("read"),
+        "pull-requests": z.literal("write"),
+      })
+      .strict(),
+    jobs: z
+      .object({
+        reanalyze: z
+          .object({
+            "timeout-minutes": z.number(),
+            steps: z.array(
+              z
+                .object({
+                  uses: z.string().optional(),
+                  run: z.string().optional(),
+                  with: z.record(z.unknown()).optional(),
+                  env: z.record(z.string()).optional(),
+                })
+                .passthrough(),
+            ),
+          })
+          .passthrough(),
+      })
+      .passthrough(),
+  })
+  .passthrough();
+
 const publishWorkflowSchema = z
   .object({
     on: z

@@ -259,7 +259,50 @@ MUST REVIEW blocks also get an inline review comment on the first changed line, 
 
 The publisher does not approve, request changes, or merge. Calls that return 401 or 403 fail with `github_request_failed`. Rate limits use the existing bounded retry. `createFoundationPipeline()` does not publish until the caller passes a publisher. Set `PUBLISH_HEAD_SHA` to the head SHA that was analyzed. When it is set and differs from the report, publishing stops before any GitHub request. An empty value skips that check. The product does not poll for a newer head.
 
-`.github/workflows/pr-review-focus.yml` stays read-only and does not publish. `.github/workflows/publish-review-focus.yml` is the trusted workflow. Dispatch it from the default branch. It checks out that ref, not the pull request head, and it does not run pull request code. Its permissions are `contents: read` and `pull-requests: write`. The write token is present only in the publish step. Set `REVIEW_FOCUS_REPORT` to a JSON report produced by trusted code. The optional `head_sha` input becomes `PUBLISH_HEAD_SHA`. `pull_request_target` is not used.
+`.github/workflows/pr-review-focus.yml` stays read-only and does not publish. `.github/workflows/publish-review-focus.yml` is the trusted workflow for a report file that already exists. Dispatch it from the default branch. It checks out that ref, not the pull request head, and it does not run pull request code. Its permissions are `contents: read` and `pull-requests: write`. The write token is present only in the publish step. Set `REVIEW_FOCUS_REPORT` to a JSON report produced by trusted code. The optional `head_sha` input becomes `PUBLISH_HEAD_SHA`. `pull_request_target` is not used.
+
+A summary with `Status: complete` finished for that head SHA. `Status: partial` adds "Analysis is incomplete." `Status: unavailable` adds "Analysis did not finish. Listed blocks are uncertain." A failed run that cannot produce blocks does not replace a summary that already lists blocks. It adds `<!-- review-navigator:incomplete -->` and keeps the previous text. A second failure does not add that note again.
+
+## Automatic reanalysis
+
+`reanalyzePullRequest` reads the current pull request, parses changed blocks with the policy `languages` and `ignore` lists, assesses them, ranks them, and publishes one summary. `node dist/reanalyze-pull-request.js` reads `GITHUB_TOKEN`, `GITHUB_REPOSITORY`, and `REVIEW_PULL_REQUEST` from the environment. `LLM_PROVIDER=none`, or a missing provider key, does not drop the blocks from the new SHA. Those blocks are published as uncertain, with status `partial` or `unavailable`. A model timeout or invalid response does the same. Fetch, parse, and rank failures keep a prior summary when one exists. When none exists and the SHAs were read, the command publishes an empty unavailable report so the failure is visible. When the pull request cannot be read and no summary exists, the command exits 1.
+
+Before publishing, the command reads the pull request again. If `headSha` differs from the SHA that was analyzed, the result is `stale` and nothing is written. Logs name the outcome, the pull request number, the base SHA, the head SHA, and the status. They do not include the token, the API key, or file text.
+
+`.github/workflows/reanalyze-review-focus.yml` is the trusted job for that command. It starts after `PR Review Focus` completes, except when that run was cancelled or skipped, and it can be started with `workflow_dispatch` and a pull request number. The job checks out `github.ref`, which for `workflow_run` is the default branch. It does not check out the pull request head. `npm ci` and `npm run build` receive empty tokens. The reanalyze step receives `github.token`, `vars.LLM_PROVIDER` (default `none`), and the `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` secret. Concurrency does not cancel an in-progress publish. The job timeout is 15 minutes. Model calls keep the existing 20 second timeout, three attempts, and $0.05 estimated ceiling per block. GitHub reads keep the existing three retries.
+
+This workflow has not been executed on GitHub. The checks below are repository contents and local tests, not a live pilot.
+
+### Enable
+
+1. Merge `.github/workflows/pr-review-focus.yml` and `.github/workflows/reanalyze-review-focus.yml` to the default branch. Automatic analysis does not run until the trusted workflow file is on that branch.
+2. Leave **PR Review Focus** enabled. The reanalyze workflow starts from its completion. Disable **Reanalyze Review Focus** in the Actions tab to stop automatic and manual analysis. Setting the `LLM_PROVIDER` Actions variable to `none` keeps comments and skips the model.
+3. Create an Actions variable `LLM_PROVIDER` with `claude`, `gpt`, or `none`. Store `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` as an Actions secret. Do not put either secret on the read-only pull request workflow.
+4. Keep the GitHub-provided `GITHUB_TOKEN`. This repository does not use a GitHub App. Write permission is only on the two trusted workflows, and both check out the trusted ref.
+5. Adjust `.github/review-focus.yml` for languages, ignore paths, and the display budget. A manual rerun is **Actions → Reanalyze Review Focus → Run workflow**, with the pull request number.
+
+### Deployment checklist
+
+- [x] Supported pull request events are `opened`, `reopened`, `synchronize`, and `ready_for_review` on the read-only workflow.
+- [x] The reanalyze job checks out the trusted ref and publishes only after a second read of the head SHA.
+- [x] A moved head is discarded. A failed run does not replace a summary that already lists blocks.
+- [x] Summary and inline comments stay on their existing markers. The reanalyze job does not cancel an in-progress publish.
+- [x] `LLM_PROVIDER=none` and a missing key publish an explicit incomplete or unavailable result.
+- [x] Languages and ignore paths come from `.github/review-focus.yml`.
+- [x] No application server or database is added. The summary comment is the stored result.
+- [ ] Run the workflow on a private repository and confirm the summary head SHA matches the pull request.
+- [ ] Rerun one historical pull request with `workflow_dispatch` and compare the selection with a human review.
+- [ ] Turn on a provider secret only after that comparison. Expand to another repository only after the pilot matches the review the team expects.
+
+### Remaining limitations
+
+- GitHub has not run this workflow. Nothing here is a completed deployment.
+- Fork pull requests do not fill `workflow_run` pull request numbers, so they are not analyzed. Use a same-repository pull request for the pilot.
+- A commit that arrives after the confirmation read and before the comment write can still land under the older SHA. The next event supersedes it. The command does not poll.
+- The per-block cost ceiling is not a per-pull-request ceiling. A large pull request sends one request per block.
+- `explainAttention` still throws. Milestone 7 is not started.
+- The synthetic evaluation is still "Not ready." It does not measure reviewer time and it does not include historical pull requests.
+- Preserving a prior summary leaves its inline comments in place. It does not rewrite them for a head SHA that was never published.
 
 ## Evaluation
 
@@ -271,11 +314,11 @@ The publisher does not approve, request changes, or merge. Calls that return 401
 - Commit `.env.example` with empty placeholders. Do not commit `.env`.
 - Do not commit private repository contents or pull request patches.
 - `CI` requests `contents: read` only. `PR Review Focus` requests `contents: read` and `pull-requests: read`. That pull request workflow does not get an LLM secret and does not publish.
-- `Publish Review Focus` requests `contents: read` and `pull-requests: write`. Dispatch it from the default branch. Do not grant that write permission to a job that runs pull request code.
+- `Publish Review Focus` and `Reanalyze Review Focus` request `contents: read` and `pull-requests: write`. Both run from the default branch and check out that ref. Do not grant that write permission to a job that runs pull request code. The model key belongs in Actions secrets on the reanalyze step only.
 
 ## Milestones
 
-Ship these in order. Milestones 1–6 and 8 are in the tree. Milestones 7 and 9 are not started.
+Ship these in order. Milestones 1–6, 8, and 9 are in the tree. Milestone 7 is not started. The reanalyze workflow has not been verified on GitHub.
 
 1. **Foundation and contracts** — Current. Tooling, module boundaries, validated configuration, and fail-closed pipeline stages.
 2. **GitHub pull request intake** — Current. Read pull request metadata, paginated changed files, patches, and file contents at the base and head commit SHAs.
@@ -285,7 +328,7 @@ Ship these in order. Milestones 1–6 and 8 are in the tree. Milestones 7 and 9 
 6. **Prioritization** — Current. Rank assessed blocks into must-review, review-if-relevant, low-priority, and needs-context groups, and keep overflow visible when the summary budget is full.
 7. **LLM explanations** — Not started. Ask Claude or GPT to explain why a selected block deserves attention.
 8. **Publication** — Current. Post one AI Review Focus summary on the pull request, update it on later runs, and anchor must-review blocks to changed lines.
-9. **GitHub Action** — Not started. Run the pipeline for a pull request and publish the focus report.
+9. **GitHub Action** — Current. Run reanalysis from a trusted checkout after the read-only pull request workflow, and publish or preserve the focus report for the analyzed head SHA.
 
 ## Stack
 

@@ -98,7 +98,8 @@ describe("tooling", () => {
     expect(readme).toMatch(/^5\. \*\*Attention analysis\*\* — Current\./m);
     expect(readme).toMatch(/^6\. \*\*Prioritization\*\* — Current\./m);
     expect(readme).toMatch(/^8\. \*\*Publication\*\* — Current\./m);
-    for (const number of [7, 9]) {
+    expect(readme).toMatch(/^9\. \*\*GitHub Action\*\* — Current\./m);
+    for (const number of [7]) {
       expect(readme).toMatch(new RegExp(`^${number}\\. .+ — Not started\\.`, "m"));
     }
   });
