@@ -4,6 +4,7 @@ import { loadConfig } from "../src/config/index.js";
 import { createFoundationPipeline } from "../src/pipeline.js";
 import { NotImplementedError } from "../src/shared/errors.js";
 import type { AttentionSignal, BlockAssessment } from "../src/analysis/types.js";
+import { LlmUnavailableError } from "../src/analysis/index.js";
 import type { ReviewFocusReport } from "../src/publisher/types.js";
 import type { LogicalBlock } from "../src/parser/types.js";
 
@@ -30,6 +31,13 @@ const block: LogicalBlock = {
 const assessment: BlockAssessment = {
   blockId: block.id,
   signals: [signal],
+  behaviorChanged: true,
+  businessImpact: "significant",
+  reviewReason: "Exported signature changed.",
+  evidence: ["The function signature changed."],
+  contextRequired: [],
+  confidence: "high",
+  uncertaintyReasons: [],
 };
 
 const report: ReviewFocusReport = {
@@ -114,7 +122,11 @@ describe("foundation pipeline", () => {
     expect(stages.map((stage) => stage.name).sort()).toEqual(Object.keys(pipeline).sort());
 
     for (const stage of stages) {
-      if (stage.name === "parseDiffs" || stage.name === "findChangedBlocks") {
+      if (
+        stage.name === "parseDiffs" ||
+        stage.name === "findChangedBlocks" ||
+        stage.name === "assessBlocks"
+      ) {
         continue;
       }
       const error = await stageError(stage.run);
@@ -173,5 +185,45 @@ describe("foundation pipeline", () => {
       true,
     );
     expect(blocks.some((item) => item.kind === "loop")).toBe(false);
+  });
+
+  it("assesses a block when the caller supplies a provider", async () => {
+    const pipeline = createFoundationPipeline();
+    const assessments = await pipeline.assessBlocks({
+      blocks: [block],
+      enabledReasons: ["public_api"],
+      sources: [
+        {
+          path: block.path,
+          baseText: "export function example() {\n  return 1;\n  return 1;\n}\n",
+          headText: "export function example() {\n  return 1;\n  return 2;\n}\n",
+        },
+      ],
+      provider: {
+        complete: () =>
+          Promise.resolve({
+            text: JSON.stringify({
+              blockId: block.id,
+              behaviorChanged: true,
+              businessImpact: "significant",
+              reviewReason: "The public_api return value changed.",
+              evidence: ["The head source returns 2."],
+              contextRequired: [],
+              confidence: "high",
+              uncertaintyReasons: [],
+            }),
+          }),
+      },
+    });
+    expect(assessments).toHaveLength(1);
+    expect(assessments[0]?.blockId).toBe(block.id);
+    expect(assessments[0]?.businessImpact).toBe("significant");
+  });
+
+  it("fails closed when semantic analysis has no provider", async () => {
+    const pipeline = createFoundationPipeline();
+    await expect(
+      pipeline.assessBlocks({ blocks: [block], enabledReasons: ["public_api"] }),
+    ).rejects.toBeInstanceOf(LlmUnavailableError);
   });
 });

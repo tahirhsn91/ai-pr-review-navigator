@@ -92,6 +92,10 @@ describe("loadConfig", () => {
     expect(config.policy.selection).toEqual({ maxBlocks: 12, minBand: "medium" });
     expect(config.policy.languages).toEqual(["typescript", "javascript"]);
     expect(config.policy.attention).toEqual([...ATTENTION_REASONS]);
+    expect(config.policy.criticality).toEqual([
+      "Payment capture changes what a customer is charged.",
+      "Authorization checks control access to an account.",
+    ]);
     expect(JSON.stringify(config)).not.toContain("test-openai");
   });
 

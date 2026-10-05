@@ -14,8 +14,19 @@ export interface AttentionExplanation {
   readonly model: string;
 }
 
+export interface LlmCompletionRequest {
+  readonly system: string;
+  readonly user: string;
+  readonly maxOutputTokens: number;
+}
+
+export interface LlmCompletion {
+  readonly text: string;
+}
+
 export interface LlmProvider {
   readonly provider: "claude" | "gpt";
   readonly model: string;
+  complete(request: LlmCompletionRequest): Promise<LlmCompletion>;
   explainAttention(request: ExplainAttentionRequest): Promise<AttentionExplanation>;
 }

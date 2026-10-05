@@ -1,4 +1,4 @@
-import { createUnimplementedAnalyzer } from "./analysis/index.js";
+import { createSemanticAnalyzer } from "./analysis/index.js";
 import type { AssessBlocksRequest, BlockAssessment } from "./analysis/types.js";
 import { createDiffParser } from "./diff/index.js";
 import type { FileDiff } from "./diff/types.js";
@@ -33,7 +33,7 @@ export function createFoundationPipeline(): ReviewPipeline {
   const github = createUnimplementedGitHubClient();
   const diffs = createDiffParser();
   const parser = createCodeParser();
-  const analysis = createUnimplementedAnalyzer();
+  const analysis = createSemanticAnalyzer();
   const prioritization = createUnimplementedPrioritizer();
   const explainAttention = unimplementedExplainAttention();
   const publisher = createUnimplementedPublisher();

@@ -31,7 +31,7 @@ Apply `ignore` and `languages` before parsing. Parsing maps syntax onto changed 
 
 Stages that are not built yet throw `NotImplementedError`. Replace that throw in the milestone that owns the stage. Return a value only after the stage has computed it from its input.
 
-`llm` explains blocks that prioritization has already selected, and only when configuration selects `claude` or `gpt`. Until that milestone, `explainAttention` throws for every provider setting, including `none`.
+`llm` completes behavioral assessments when the caller selects `claude` or `gpt`. `explainAttention` still throws for every provider setting, including `none`, until the explanation milestone.
 
 ## Coding conventions
 
@@ -62,4 +62,4 @@ Cover validation, module boundaries, and fail-closed stages with synthetic input
 
 ## Milestones
 
-Ship the nine milestones in the README in order. This tree includes milestones 1–4 and the unprivileged pull request workflow that validates and logs event metadata. `createGitHubClient` and `processPullRequestDiff` retrieve and normalize a diff. `createCodeParser` maps changed TypeScript and JavaScript lines onto logical blocks. `createFoundationPipeline` still leaves GitHub fetch, analysis, ranking, explanations, and publishing unimplemented. The pull request workflow does not call the REST API, an LLM, or the comment API. Milestones 5–9 in the README are not started. Start the next milestone when the task asks for it.
+Ship the nine milestones in the README in order. This tree includes milestones 1–5 and the unprivileged pull request workflow that validates and logs event metadata. `createGitHubClient` and `processPullRequestDiff` retrieve and normalize a diff. `createCodeParser` maps changed TypeScript and JavaScript lines onto logical blocks. `createSemanticAnalyzer` assesses those blocks when the caller supplies `createLlmProvider`. `createFoundationPipeline` still leaves GitHub fetch, ranking, explanations, and publishing unimplemented. The pull request workflow does not call the REST API, an LLM, or the comment API. Milestones 6–9 in the README are not started. Start the next milestone when the task asks for it.
