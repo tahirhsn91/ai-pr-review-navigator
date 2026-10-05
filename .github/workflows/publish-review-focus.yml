@@ -1,0 +1,67 @@
+# Trusted publishing workflow.
+# Dispatch it from the default branch. The job checks out that ref and does not
+# run pull request code. It is not attached to a pull request event.
+
+name: Publish Review Focus
+
+on:
+  workflow_dispatch:
+    inputs:
+      pull_request:
+        description: Pull request number
+        required: true
+        type: string
+      report_path:
+        description: Path to a review-focus report JSON file in the trusted checkout
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: publish-review-focus-${{ github.repository }}-${{ inputs.pull_request }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash --noprofile --norc -euo pipefail {0}
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out trusted ref
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.ref }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+        env:
+          GITHUB_TOKEN: ""
+          GH_TOKEN: ""
+
+      - name: Build
+        run: npm run build
+        env:
+          GITHUB_TOKEN: ""
+          GH_TOKEN: ""
+
+      - name: Publish review focus
+        run: node dist/publisher/publish-review-focus.js
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GH_TOKEN: ""
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          PUBLISH_PULL_REQUEST: ${{ inputs.pull_request }}
+          REVIEW_FOCUS_REPORT: ${{ inputs.report_path }}

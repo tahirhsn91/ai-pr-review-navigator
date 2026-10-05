@@ -2,7 +2,7 @@
 
 Review Navigator is a GitHub-native tool that finds the logical code blocks in a pull request that deserve a human reviewer. It orders attention. It does not hunt for bugs, assign defect severity, or propose patches.
 
-The library loads and validates configuration, retrieves a pull request diff from the GitHub REST API when a caller supplies a token, maps changed lines in TypeScript and JavaScript onto logical blocks, asks Claude or GPT whether a candidate block changes behavior, and ranks those blocks into review groups. LLM explanations of selected blocks and comment publishing are not implemented. Those pipeline stages still fail closed.
+The library loads and validates configuration, retrieves a pull request diff from the GitHub REST API when a caller supplies a token, maps changed lines in TypeScript and JavaScript onto logical blocks, asks Claude or GPT whether a candidate block changes behavior, ranks those blocks into review groups, and can publish that report on the pull request. LLM explanations of selected blocks are not implemented. That pipeline stage still fails closed.
 
 `.github/workflows/pr-review-focus.yml` is an unprivileged pull request workflow. It runs the project checks and logs the pull request number, base SHA, head SHA, and event type from the Actions event. That workflow does not call the GitHub REST API and does not need an LLM secret.
 
@@ -31,7 +31,7 @@ npm test
 npm run build
 ```
 
-`npm run format` rewrites files with Prettier. The foundation has no CLI that reviews a pull request. `createFoundationPipeline()` throws `NotImplementedError` from the stages that are not implemented. `assessBlocks` runs semantic analysis when the caller supplies a provider. `rankBlocks` selects and ranks assessed blocks.
+`npm run format` rewrites files with Prettier. The foundation has no CLI that reviews a pull request. `createFoundationPipeline()` throws `NotImplementedError` from the stages that are not implemented. `assessBlocks` runs semantic analysis when the caller supplies a provider. `rankBlocks` selects and ranks assessed blocks. `publish` posts the report when the caller supplies `createReviewPublisher`.
 
 After `npm run build`, `node dist/github/report-pull-request-event.js` prints pull request metadata when `GITHUB_EVENT_PATH` points at a GitHub `pull_request` event file.
 
@@ -107,7 +107,7 @@ Filter `ignore` and `languages` before parsing. The parser maps syntax onto chan
 | `src/analysis`       | Behavioral assessment of a changed logical block                                                   |
 | `src/prioritization` | Select and rank changed blocks into review groups under the policy budget                          |
 | `src/llm`            | Claude or GPT completions for that assessment. Explanations of selected blocks are not implemented |
-| `src/publisher`      | Post the focus report on the pull request                                                          |
+| `src/publisher`      | Post one idempotent focus comment and inline anchors on the pull request                           |
 | `src/shared`         | Errors, line ranges, and shared vocabulary                                                         |
 
 `src/pipeline.ts` composes those modules. `src/index.ts` is the package entry. Import rules live in `MODULE_IMPORTS` in `src/shared/modules.ts`.
@@ -249,16 +249,29 @@ Groups:
 
 Deduplication prefers the smallest understandable block when changed ranges overlap. It expands to the enclosing block when that block's assessment requests surrounding context. Overlapping partial ranges are merged, and the report lists the kept id, the absorbed ids, and the duplicate ids.
 
+## Publishing
+
+`createReviewPublisher({ token }).publish` posts the ranked blocks to the pull request through the GitHub REST API. `toReviewFocusReport` maps a prioritization report into the publishing report. The comment is titled **AI Review Focus** and starts with the marker `<!-- review-navigator:summary -->`. A second publish updates that comment. It does not add another summary. Extra copies of the marker are deleted.
+
+The comment lists the base and head SHAs, MUST REVIEW blocks, REVIEW IF RELEVANT blocks, a collapsed low-priority section, and NEEDS CONTEXT blocks. Each block shows its symbol, file, changed line range, a link to that range, and the review reason. The comment states that priorities indicate review importance, not verified defects.
+
+MUST REVIEW blocks also get an inline review comment on the first changed line, using `RIGHT` for the head side and `LEFT` for the base side. The comment is tied to the head SHA. When the logical block is wider than the changed range, the inline comment stays on the changed line and links to the wider range. GitHub rejects a line that is not in the diff with status 422. That block stays in the summary, and the publisher does not try another line. Inline comments carry `<!-- review-navigator:inline ... -->`. A later publish updates a comment that is still on the same line and removes comments for blocks that are no longer must-review.
+
+The publisher does not approve, request changes, or merge. Calls that return 401 or 403 fail with `github_request_failed`. Rate limits use the existing bounded retry. `createFoundationPipeline()` does not publish until the caller passes a publisher.
+
+`.github/workflows/pr-review-focus.yml` stays read-only and does not publish. `.github/workflows/publish-review-focus.yml` is the trusted workflow. Dispatch it from the default branch. It checks out that ref, not the pull request head, and it does not run pull request code. Its permissions are `contents: read` and `pull-requests: write`. The write token is present only in the publish step. Set `REVIEW_FOCUS_REPORT` to a JSON report produced by trusted code. `pull_request_target` is not used.
+
 ## Security
 
 - Put `GITHUB_TOKEN` in the environment when a caller retrieves a pull request diff. Put `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` in the environment when semantic analysis calls Claude or GPT.
 - Commit `.env.example` with empty placeholders. Do not commit `.env`.
 - Do not commit private repository contents or pull request patches.
-- `CI` requests `contents: read` only. `PR Review Focus` requests `contents: read` and `pull-requests: read`. That pull request workflow does not get an LLM secret.
+- `CI` requests `contents: read` only. `PR Review Focus` requests `contents: read` and `pull-requests: read`. That pull request workflow does not get an LLM secret and does not publish.
+- `Publish Review Focus` requests `contents: read` and `pull-requests: write`. Dispatch it from the default branch. Do not grant that write permission to a job that runs pull request code.
 
 ## Milestones
 
-Ship these in order. Milestones 1–6 are in the tree. Milestones 7–9 are not started.
+Ship these in order. Milestones 1–6 and 8 are in the tree. Milestones 7 and 9 are not started.
 
 1. **Foundation and contracts** — Current. Tooling, module boundaries, validated configuration, and fail-closed pipeline stages.
 2. **GitHub pull request intake** — Current. Read pull request metadata, paginated changed files, patches, and file contents at the base and head commit SHAs.
@@ -267,7 +280,7 @@ Ship these in order. Milestones 1–6 are in the tree. Milestones 7–9 are not 
 5. **Attention analysis** — Current. Ask Claude or GPT whether a candidate block changes behavior, validate the JSON, and keep an uncertain result explicit.
 6. **Prioritization** — Current. Rank assessed blocks into must-review, review-if-relevant, low-priority, and needs-context groups, and keep overflow visible when the summary budget is full.
 7. **LLM explanations** — Not started. Ask Claude or GPT to explain why a selected block deserves attention.
-8. **Publication** — Not started. Post one pull request review comment that points at the selected blocks.
+8. **Publication** — Current. Post one AI Review Focus summary on the pull request, update it on later runs, and anchor must-review blocks to changed lines.
 9. **GitHub Action** — Not started. Run the pipeline for a pull request and publish the focus report.
 
 ## Stack

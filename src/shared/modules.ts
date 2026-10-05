@@ -34,7 +34,7 @@ const boundaries = [
   },
   {
     name: "publisher",
-    responsibility: "Owns posting the focus report to the pull request.",
+    responsibility: "Owns posting and updating one focus comment and its inline anchors.",
   },
   {
     name: "shared",

@@ -114,3 +114,79 @@ describe("pr-review-focus workflow", () => {
     }
   });
 });
+
+describe("publish review focus workflow", () => {
+  it("grants write only to the trusted dispatch job", () => {
+    const text = readFileSync(resolve(".github/workflows/publish-review-focus.yml"), "utf8");
+    expect(text).not.toContain("pull_request_target");
+    expect(text).not.toMatch(/ANTHROPIC|OPENAI|LLM_/u);
+    expect(text).not.toContain("APPROVE");
+
+    const workflow = publishWorkflowSchema.parse(parse(text));
+    expect(workflow.on.workflow_dispatch).toBeDefined();
+    expect(workflow.permissions).toEqual({
+      contents: "read",
+      "pull-requests": "write",
+    });
+
+    const job = workflow.jobs.publish;
+    expect(job).toBeDefined();
+    if (job === undefined) {
+      return;
+    }
+    const checkout = job.steps.find((step) => step.uses?.startsWith("actions/checkout@"));
+    expect(checkout?.with).toMatchObject({
+      "persist-credentials": false,
+      ref: "${{ github.ref }}",
+    });
+    expect(checkout?.uses).toBe("actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1");
+
+    const install = job.steps.find((step) => step.run === "npm ci");
+    const build = job.steps.find((step) => step.run === "npm run build");
+    expect(install?.env).toMatchObject({ GITHUB_TOKEN: "", GH_TOKEN: "" });
+    expect(build?.env).toMatchObject({ GITHUB_TOKEN: "", GH_TOKEN: "" });
+
+    const publish = job.steps.find(
+      (step) => step.run === "node dist/publisher/publish-review-focus.js",
+    );
+    expect(publish?.env).toMatchObject({
+      GITHUB_TOKEN: "${{ github.token }}",
+      GH_TOKEN: "",
+      REVIEW_FOCUS_REPORT: "${{ inputs.report_path }}",
+    });
+  });
+});
+
+const publishWorkflowSchema = z
+  .object({
+    on: z
+      .object({
+        workflow_dispatch: z.object({}).passthrough(),
+      })
+      .strict(),
+    permissions: z
+      .object({
+        contents: z.literal("read"),
+        "pull-requests": z.literal("write"),
+      })
+      .strict(),
+    jobs: z
+      .object({
+        publish: z
+          .object({
+            steps: z.array(
+              z
+                .object({
+                  uses: z.string().optional(),
+                  run: z.string().optional(),
+                  with: z.record(z.unknown()).optional(),
+                  env: z.record(z.string()).optional(),
+                })
+                .passthrough(),
+            ),
+          })
+          .passthrough(),
+      })
+      .passthrough(),
+  })
+  .passthrough();
