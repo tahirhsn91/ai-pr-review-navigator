@@ -69,6 +69,7 @@ jobs:
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
           owner: ${{ inputs.owner }}
           repositories: ${{ inputs.repository }}
+          permission-metadata: read
           permission-contents: read
           permission-issues: write
           permission-pull-requests: write

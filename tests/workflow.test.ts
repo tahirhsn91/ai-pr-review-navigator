@@ -250,6 +250,7 @@ describe("review another repository workflow", () => {
     expect(text).toContain(
       "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1",
     );
+    expect(text).toContain("permission-metadata: read");
     expect(text).toContain("permission-contents: read");
     expect(text).toContain("permission-issues: write");
     expect(text).toContain("permission-pull-requests: write");
