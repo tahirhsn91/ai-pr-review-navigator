@@ -24,7 +24,8 @@ const boundaries = [
   },
   {
     name: "prioritization",
-    responsibility: "Owns ranking blocks and applying the policy selection limits.",
+    responsibility:
+      "Owns selecting and ranking changed blocks into review groups under the policy budget.",
   },
   {
     name: "llm",

@@ -96,7 +96,8 @@ describe("tooling", () => {
     expect(readme).toMatch(/^3\. \*\*Diff model\*\* — Current\./m);
     expect(readme).toMatch(/^4\. \*\*Logical blocks\*\* — Current\./m);
     expect(readme).toMatch(/^5\. \*\*Attention analysis\*\* — Current\./m);
-    for (const number of [6, 7, 8, 9]) {
+    expect(readme).toMatch(/^6\. \*\*Prioritization\*\* — Current\./m);
+    for (const number of [7, 8, 9]) {
       expect(readme).toMatch(new RegExp(`^${number}\\. .+ — Not started\\.`, "m"));
     }
   });

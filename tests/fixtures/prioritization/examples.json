@@ -1,0 +1,148 @@
+{
+  "calculation": {
+    "baseSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "headSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "analysisStatus": "complete",
+    "groups": {
+      "mustReview": [
+        {
+          "blockId": "calc-capture",
+          "path": "src/billing.ts",
+          "group": "must_review",
+          "band": "high",
+          "rank": 1,
+          "range": {
+            "startLine": 4,
+            "endLine": 5
+          },
+          "blockRange": {
+            "startLine": 2,
+            "endLine": 6
+          },
+          "reviewReason": "Payment capture now charges twice the previous amount.",
+          "evidence": ["The new block multiplies the captured amount by 2."],
+          "confidence": "high",
+          "uncertaintyReasons": [],
+          "businessImpact": "critical",
+          "behaviorChanged": true
+        }
+      ],
+      "reviewIfRelevant": [],
+      "lowPriority": [],
+      "needsContext": []
+    },
+    "displayed": ["calc-capture"],
+    "overflow": [],
+    "counts": {
+      "candidates": 1,
+      "selected": 1,
+      "displayed": 1,
+      "overflow": 0,
+      "hiddenLowPriority": 0,
+      "merged": 0,
+      "duplicatesRemoved": 0,
+      "excludedWithoutChanges": 0,
+      "excludedWithoutLocation": 0
+    },
+    "deduplication": {
+      "merged": [],
+      "duplicatesRemoved": [],
+      "expanded": [],
+      "unmatchedAssessments": []
+    }
+  },
+  "overflow": {
+    "baseSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "headSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "analysisStatus": "complete",
+    "groups": {
+      "mustReview": [
+        {
+          "blockId": "calc-capture",
+          "path": "src/capture.ts",
+          "group": "must_review",
+          "band": "high",
+          "rank": 1,
+          "range": {
+            "startLine": 4,
+            "endLine": 4
+          },
+          "blockRange": {
+            "startLine": 1,
+            "endLine": 10
+          },
+          "reviewReason": "Payment capture now charges twice the previous amount.",
+          "evidence": ["The captured amount is multiplied by 2."],
+          "confidence": "high",
+          "uncertaintyReasons": [],
+          "businessImpact": "critical",
+          "behaviorChanged": true
+        },
+        {
+          "blockId": "calc-refund",
+          "path": "src/refund.ts",
+          "group": "must_review",
+          "band": "high",
+          "rank": 2,
+          "range": {
+            "startLine": 4,
+            "endLine": 4
+          },
+          "blockRange": {
+            "startLine": 1,
+            "endLine": 10
+          },
+          "reviewReason": "Refunds now return the captured amount.",
+          "evidence": ["The refund total uses the captured amount."],
+          "confidence": "high",
+          "uncertaintyReasons": [],
+          "businessImpact": "significant",
+          "behaviorChanged": true
+        },
+        {
+          "blockId": "auth-owner",
+          "path": "src/auth.ts",
+          "group": "must_review",
+          "band": "high",
+          "rank": 3,
+          "range": {
+            "startLine": 4,
+            "endLine": 4
+          },
+          "blockRange": {
+            "startLine": 1,
+            "endLine": 10
+          },
+          "reviewReason": "Authorization now requires the account owner.",
+          "evidence": ["The owner check was added."],
+          "confidence": "high",
+          "uncertaintyReasons": [],
+          "businessImpact": "limited",
+          "behaviorChanged": true
+        }
+      ],
+      "reviewIfRelevant": [],
+      "lowPriority": [],
+      "needsContext": []
+    },
+    "displayed": ["calc-capture"],
+    "overflow": ["calc-refund", "auth-owner"],
+    "counts": {
+      "candidates": 3,
+      "selected": 3,
+      "displayed": 1,
+      "overflow": 2,
+      "hiddenLowPriority": 0,
+      "merged": 0,
+      "duplicatesRemoved": 0,
+      "excludedWithoutChanges": 0,
+      "excludedWithoutLocation": 0
+    },
+    "deduplication": {
+      "merged": [],
+      "duplicatesRemoved": [],
+      "expanded": [],
+      "unmatchedAssessments": []
+    }
+  }
+}

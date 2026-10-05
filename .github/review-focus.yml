@@ -1,5 +1,5 @@
-# Review focus policy. criticality is configuration the semantic analyzer
-# may read. This file does not rank blocks or report defects.
+# Review focus policy. criticality is read by semantic analysis.
+# selection limits the prioritization summary. This file does not publish a review.
 version: 1
 selection:
   maxBlocks: 12

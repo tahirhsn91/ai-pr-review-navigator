@@ -69,7 +69,21 @@ export type {
   SemanticModel,
 } from "./analysis/types.js";
 export { ANALYSIS_CONFIDENCE, BUSINESS_IMPACTS } from "./analysis/types.js";
-export type { Prioritizer, RankBlocksRequest, RankedBlock } from "./prioritization/types.js";
+export { createPrioritizer, PrioritizationError } from "./prioritization/index.js";
+export { ANALYSIS_STATUSES, REVIEW_GROUPS } from "./prioritization/types.js";
+export type {
+  AnalysisStatus,
+  DependencyImpact,
+  FocusCounts,
+  FocusDeduplication,
+  FocusGroups,
+  FocusReport,
+  Prioritizer,
+  RankBlocksRequest,
+  RankedBlock,
+  ReviewGroup,
+  TestEvidence,
+} from "./prioritization/types.js";
 export type {
   PublishReceipt,
   ReviewFocusItem,
